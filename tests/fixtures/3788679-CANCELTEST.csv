@@ -1,0 +1,2 @@
+Type,Reference number,Check-in,Checkout,Guest name,Reservation status,Currency,Payment status,City tax,Amount,Commission,Payment charge,,Net,Payout date,Payout ID
+Reservation,5593245000,Sep 10 2025,Sep 14 2025,Clara Fontaine,cancelled,EUR,by_booking,0.00,200.00,-32.00,-2.80,,165.20,Oct 1 2025,CANCELTEST

@@ -1,0 +1,20 @@
+# Core CLI framework
+click>=8.1.0
+
+# Excel export (3-sheet workbook)
+openpyxl>=3.1.0
+
+# Google Drive API (download CSVs, upload Excel)
+google-api-python-client>=2.100.0
+google-auth>=2.0.0
+google-auth-httplib2>=0.2.0
+
+# Google Sheets reporting (optional — only needed when using --sheet-id)
+gspread>=6.0.0
+
+# Cloud Run HTTP server
+flask>=3.0.0
+gunicorn>=21.0.0
+
+# Development / testing
+pytest>=7.0.0

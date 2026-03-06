@@ -1,0 +1,32 @@
+﻿concept,champ_mews,champ_ru,valeur_mews_exemple,valeur_ru_exemple,relation,source_preferee,note
+Identifiant réservation interne,reservation_id  (UUID),ru_reservation_id  (numérique),1bf77f64-…-eaaf71,45123456,"clés différentes, pas de lien direct",Mews,utiliser channel_number ↔ reference_id pour le join
+Référence canal (clé de jointure),channel_number,reference_id,5881802661,5881802661,mews.channel_number = ru.reference_id  ← JOIN KEY,—,identique dans les deux systèmes
+Revenu net reçu par Merveil,total_revenue_net  (après fix dbt),ru_price,4 669.36 €,5 136.30 €,"ru_price = mews_total_net × 1.10  (TVA 10%)
+→ ru_price ≈ mews_total_gross  (hors TVA Mews)",RU,RU = montant hors TVA locale ; Mews net = même montant après déduction TVA 10%. Vérification: ru_price ≈ mews_total_gross pour réservations actives.
+Loyer brut (avant commission OTA),accommodation_revenue_gross  ⚠️,channel_rent,"5 136.30 €  (Booking)
+2 401.01 €  (Airbnb)","4 669.36 €  (Booking)
+2 415.21 €  (Airbnb)","Booking : mews_accom ≈ ru_price (pas channel_rent)
+Airbnb  : mews_accom ≈ channel_rent × 0.9941",RU,"⚠️ Pour annulées : mews_accom = valeur des nuitées INITIALES, pas le revenu encaissé. Utiliser total_revenue_gross après fix."
+Commission OTA,(absent),channel_commission,—,"946.17 €  (20.3% Booking)
+374.36 €  (15.5% Airbnb)","ru_price = channel_rent - channel_commission
+→ commission = channel_rent - ru_price",RU  ← UNIQUEMENT disponible dans RU,"Taux: Airbnb 15-15.5%, Booking ~20.26%, Expedia 14.85-16.5%, Marriott ~17.23%"
+Montant total payé par le client,(absent directement),channel_total,—,"5 214.30 €  (Booking)
+2 498.41 €  (Airbnb)","Booking : channel_total = ru_price + taxe_sejour
+Airbnb  : channel_total = channel_rent + frais_service_guest",RU  ← UNIQUEMENT disponible dans RU,channel_total - ru_price ≈ taxe séjour (Booking ~45€) ou frais guest Airbnb
+Revenu brut avec TVA (tel qu'affiché dans Mews),total_revenue_gross  (après fix dbt),(pas d'équivalent exact),5 136.30 €,—,"= total_revenue_net × 1.10  (TVA 10% implicite Mews)
+≈ ru_price pour réservations actives",Mews,Après fix : pour annulées → = cancellation_fee_gross. Avant fix : était doublé pour annulées avec frais.
+Frais d'annulation,cancellation_fee_gross / cancellation_fee_net,(pas de champ dédié),5 136.30 €,—,"Mews crée un item CancellationFee séparé des SpaceOrder items
+→ pour annulées : total_revenue_gross = cancellation_fee_gross (après fix)",Mews,RU : ru_price reste = valeur originale même après annulation (pas de champ frais annul dédié)
+TVA / taxe implicite,total_revenue_gross - total_revenue_net,(absent),10272.60 - 9338.76 = 933.84 € → 9.09%,—,"Mews applique TVA 10% : gross / 1.10 = net
+→ taux apparent = 1/11 = 9.09%",Mews,RU ne gère pas la TVA française — Mews est la seule source
+Remise / promotion canal,rebate_amount_gross,channel_promotion,0 €  (souvent vide),0 €  (souvent vide),non corrélés directement,RU,channel_promotion = remise accordée par le canal (peu utilisé sur la période analysée)
+Acompte déjà encaissé,(absent),already_paid,—,variable,—,RU  ← UNIQUEMENT disponible dans RU,montant déjà versé par le client au moment de la résa (acompte)
+Prix affiché au client (tarif public),(absent),client_price,—,variable,souvent = channel_total,RU  ← UNIQUEMENT disponible dans RU,
+ADR (tarif nuitée moyen),adr  = accommodation_revenue_net / nights,(calculable) ru_price / nights,466.94 €/nuit,513.63 €/nuit,"mews_adr = ru_adr / 1.10  (TVA)
+= ru_price / nights / 1.10",Mews,mews_adr basé sur accommodation_net = nuitées nettes hors TVA. Pour annulées : ADR = tarif réservé (pas encaissé).
+Taux de commission effectif,(calculable) 1 - total_revenue_net / accommodation_revenue_net,channel_commission / channel_rent × 100,—,20.28%  (Booking),—,RU  ← beaucoup plus fiable,Mews ne stocke pas la commission OTA — RU est la seule source directe
+Statut réservation,status  (Confirmed / Canceled / CheckedOut),"status_id  (1=Confirmé, 2=Annulé)",Canceled,2,"mews.Canceled ↔ ru.status_id=2
+mews.Confirmed ↔ ru.status_id=1",Mews,"Mews plus granulaire (CheckedOut, InHouse...)"
+Dates de séjour,checkin_date / checkout_date,date_from / date_to,2026-03-17 / 2026-03-27,2026-03-17 / 2026-03-27,identiques,—,
+Canal de réservation,booking_channel  (OTA / Direct / Manual),creator  (airbnb@rentalsunited.com…),OTA,bookingcom@rentalsunited.com,mews 'OTA' = tous les canaux RU sauf Direct,RU,Mews ne distingue pas Airbnb de Booking (tous = OTA). RU donne le canal précis.
+Appartement,apartment_name / apartment_code,xml_apartment_id / property_id,Merveil Haussmann - 3BR,a3f2b8…  (hash RU),pas de mapping direct — nécessite table de référence RU,Mews,"xml_apartment_id RU = identifiant opaque, pas lisible"

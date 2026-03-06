@@ -1,0 +1,2 @@
+Type,Reference number,Check-in,Checkout,Guest name,Reservation status,Currency,Payment status,City tax,Amount,Commission,Payment charge,,Net,Payout date,Payout ID
+Reservation,7700000001,Aug 1 2025,Aug 5 2025,Bob Martin,ok,EUR,by_booking,-8.00,400.00,-60.00,-5.00,,327.00,Oct 1 2025,BADNAME

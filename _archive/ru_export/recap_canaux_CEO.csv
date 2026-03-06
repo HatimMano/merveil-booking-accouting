@@ -1,0 +1,6 @@
+﻿canal,nb_reservations_total,nb_confirmees,nb_annulees,taux_annulation_pct,nuits_totales,nuits_moy_par_resa,ru_price_total,ru_price_moy,ch_rent_total,ch_commission_total,commission_pct_moyen,commission_pct_min,commission_pct_max,ch_total_guests_total,mews_total_gross_brut,note_modele_commission
+airbnb,85,68,17,20.0,348,4.1,238265,2803,281746,43481,15.48,15.0,15.5,289031,293333,"commission déduite du payout (15% Signature Suites, 15.5% standard)"
+bookingcom,81,47,34,42.0,343,4.2,231333,2856,210302,42626,20.28,20.24,20.74,235027,244862,commission déduite du payout (~20.26%)
+expedia,36,28,8,22.2,140,3.9,97391,2705,110020,13930,15.06,14.85,16.5,97391,98539,"modèle mixte : 14.85% standard (comm déduite) OU net rate (ru_price=ch_total, comm invisible)"
+marriott,18,13,5,27.8,74,4.1,61598,3422,65268,11247,17.23,17.21,17.27,72845,74215,commission déduite du payout (~17.23%)
+plumguide,5,4,1,20.0,23,4.6,29595,5919,0,4363,,,,0,31765,commission déduite du payout

@@ -1,0 +1,3 @@
+Type,Reference number,Check-in,Checkout,Guest name,Reservation status,Currency,Payment status,City tax,Amount,Commission,Payment charge,,Net,Payout date,Payout ID
+Reservation,5493245107,Aug 28 2025,Sep 1 2025,Momin Bashir,ok,EUR,by_booking,-20.80,544.60,-89.05,-7.33,,427.42,Oct 1 2025,7oaOsO2VGKHbvBNQ
+Reservation,5500000001,Sep 5 2025,Sep 8 2025,Jean Dupont,ok,EUR,by_booking,-10.40,320.00,-52.48,-4.57,,252.55,Oct 1 2025,7oaOsO2VGKHbvBNQ

@@ -1,0 +1,2 @@
+Type,Reference number,Check-in,Checkout,Guest name,Reservation status,Currency,Payment status,City tax,Amount,Commission,Payment charge,,Net,Payout date,Payout ID
+Reservation,6600000001,Aug 10 2025,Aug 15 2025,Alice Smith,ok,USD,by_booking,-5.00,300.00,-45.00,-3.00,,247.00,Oct 1 2025,INVALIDCURRTEST
