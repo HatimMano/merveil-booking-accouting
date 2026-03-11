@@ -20,7 +20,10 @@ AIRBNB_ACCOUNT_SUPPLIER = "401AIRBNB"  # Supplier payable — Airbnb host servic
 AIRBNB_ACCOUNT_BANK = "51105000"       # Same bank account
 
 # Airbnb Excel row types to include in accounting entries
-AIRBNB_RESERVATION_TYPES = {"Réservation", "Régularisation de la résolution", "Hors réservation"}
+AIRBNB_RESERVATION_TYPES = {"Réservation", "Régularisation de la résolution", "Hors réservation", "Frais d'annulation"}
+
+# Account for Airbnb cancellation fees charged to the host (reclassement automatique)
+AIRBNB_ACCOUNT_CANCELLATION_FEE = "604610"
 
 # === Validation thresholds ===
 

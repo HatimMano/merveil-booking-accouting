@@ -67,6 +67,7 @@ def generate_entries(
     account_bank: str = ACCOUNT_BANK,
     account_client: str = ACCOUNT_CLIENT,
     account_supplier: str = ACCOUNT_SUPPLIER,
+    account_cancellation_fee: Optional[str] = None,
     ota_label: str = "BOOKING",
 ) -> Tuple[List[AccountingEntry], List[Reservation], List[Anomaly]]:
     """
@@ -88,11 +89,13 @@ def generate_entries(
         reservations:     Normalized reservations from the parser.
         processing_date:  Date to stamp on every accounting entry.
         mapping:          Dict of OTA-ref → accounting-code from the mapping file.
-        journal_code:     Journal code (default "BOOK", use "AIRB" for Airbnb).
-        account_bank:     Bank account code (default "51105000").
-        account_client:   Client account code (default "411BOOKING").
-        account_supplier: Supplier account code (default "401BOOKING").
-        ota_label:        OTA name used in entry labels (default "BOOKING").
+        journal_code:            Journal code (default "BOOK", use "AIRB" for Airbnb).
+        account_bank:            Bank account code (default "51105000").
+        account_client:          Client account code (default "411BOOKING").
+        account_supplier:        Supplier account code (default "401BOOKING").
+        account_cancellation_fee: If provided, Airbnb "Frais d'annulation" rows are
+                                  routed here (e.g. "604610") instead of account_client.
+        ota_label:               OTA name used in entry labels (default "BOOKING").
 
     Returns:
         (entries, processed_reservations, anomalies)
@@ -164,21 +167,39 @@ def generate_entries(
     ))
 
     # Per-reservation entries
-    # Normal reservation: CREDIT client = gross (positive)
-    # Adjustment/refund:  DEBIT  client = |gross| (reversal of rental income)
+    # Normal reservation:   CREDIT account_client            = gross (positive)
+    # Adjustment/refund:    DEBIT  account_client            = |gross| (reversal)
+    # Cancellation fee:     DEBIT  account_cancellation_fee  = |gross| (expense)
     for r in valid_reservations:
         checkout_label = _label_date(r.checkout)
         gross_excl_city_tax = r.amount + r.city_tax  # city_tax is stored negative
 
-        entries.append(AccountingEntry(
-            journal=journal_code,
-            date=processing_date,
-            ref_piece="",
-            account=account_client,
-            label=f"{r.code_comptable}- {ota_label} - {r.guest_name} - CO :{checkout_label}",
-            debit=None if gross_excl_city_tax >= 0 else -gross_excl_city_tax,
-            credit=gross_excl_city_tax if gross_excl_city_tax >= 0 else None,
-        ))
+        is_cancellation_fee = (
+            account_cancellation_fee is not None
+            and r.reservation_status == "Frais d'annulation"
+        )
+
+        if is_cancellation_fee:
+            # Route directly to 604610 — no intermediate 411AIRBNB step
+            entries.append(AccountingEntry(
+                journal=journal_code,
+                date=processing_date,
+                ref_piece="",
+                account=account_cancellation_fee,
+                label=f"{r.code_comptable} - {ota_label} - Frais d'annulation - {r.guest_name} - {r.reference_number}",
+                debit=-gross_excl_city_tax if gross_excl_city_tax < 0 else gross_excl_city_tax,
+                credit=None,
+            ))
+        else:
+            entries.append(AccountingEntry(
+                journal=journal_code,
+                date=processing_date,
+                ref_piece="",
+                account=account_client,
+                label=f"{r.code_comptable}- {ota_label} - {r.guest_name} - CO :{checkout_label}",
+                debit=None if gross_excl_city_tax >= 0 else -gross_excl_city_tax,
+                credit=gross_excl_city_tax if gross_excl_city_tax >= 0 else None,
+            ))
 
     logger.info(
         "Generated %d accounting entries for %d reservation(s)",

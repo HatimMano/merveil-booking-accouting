@@ -38,6 +38,7 @@ from config.settings import (
     AIRBNB_ACCOUNT_BANK,
     AIRBNB_ACCOUNT_CLIENT,
     AIRBNB_ACCOUNT_SUPPLIER,
+    AIRBNB_ACCOUNT_CANCELLATION_FEE,
 )
 from parsers.booking import BookingParser
 from parsers.airbnb import AirbnbParser
@@ -232,6 +233,7 @@ def _run_airbnb_pipeline(folder_id: str, output_folder_id: str, processing_date,
                 account_bank=AIRBNB_ACCOUNT_BANK,
                 account_client=AIRBNB_ACCOUNT_CLIENT,
                 account_supplier=AIRBNB_ACCOUNT_SUPPLIER,
+                account_cancellation_fee=AIRBNB_ACCOUNT_CANCELLATION_FEE,
                 ota_label="AIRBNB",
             )
             anomalies.extend(entry_anomalies)
