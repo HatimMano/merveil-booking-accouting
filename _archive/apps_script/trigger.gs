@@ -1,16 +1,15 @@
 /**
- * Booking + Airbnb → PennyLane  |  Google Apps Script — triggers hebdo/quotidien
+ * OBSOLETE - NE PAS UTILISER
  *
+ * Ce fichier Apps Script a été remplacé par un Cloud Scheduler GCP
+ * qui appelle directement le service Cloud Run en Python.
+ * Le pipeline est 100% Python — aucun Apps Script n'est actif.
+ *
+ * Conservé uniquement à titre de référence historique.
+ * ─────────────────────────────────────────────────────────────────────────
+ * [ARCHIVE] Booking + Airbnb → PennyLane  |  Google Apps Script
  * Booking.com : tous les lundis à 8h (Europe/Paris)
  * Airbnb      : tous les jours  à 8h (Europe/Paris)
- *
- * ── SETUP (do once) ──────────────────────────────────────────────────────
- * 1. Ouvrir https://script.google.com → Nouveau projet
- * 2. Coller ce fichier
- * 3. Remplir les constantes BOOKING_FOLDER_ID et AIRBNB_FOLDER_ID ci-dessous
- * 4. Exécuter  installTriggers()  une seule fois depuis l'éditeur
- * 5. Autoriser quand demandé
- * 6. Pour tester sans attendre : exécuter  triggerBookingNow()
  * ─────────────────────────────────────────────────────────────────────────
  */
 
