@@ -17,7 +17,9 @@ On success it returns:
         "warnings": 8,
         "blocking": 0,
         "balance_ok": true,
-        "excel_file_id": "1xyz..."
+        "pennylane_entry_id": 12345       // booking — unique PennyLane entry id
+        // OR
+        "pennylane_batches_posted": 40    // airbnb — number of payout batches posted
     }
 """
 
@@ -43,8 +45,8 @@ from config.settings import (
 from parsers.booking import BookingParser
 from parsers.airbnb import AirbnbParser
 from accounting.entries import generate_entries
-from accounting.excel import create_excel_workbook
 from drive.client import DriveClient
+from pennylane.client import PennyLaneClient
 from validators.anomalies import (
     Severity,
     check_balance,
@@ -81,10 +83,9 @@ def health():
 @app.route("/process", methods=["POST"])
 def process():
     body = request.get_json(force=True, silent=True) or {}
-    folder_id        = body.get("folder_id")
-    output_folder_id = body.get("output_folder_id") or folder_id
-    date_str         = body.get("date")
-    ota              = body.get("ota", "booking")
+    folder_id = body.get("folder_id")
+    date_str  = body.get("date")
+    ota       = body.get("ota", "booking")
 
     if not folder_id:
         return jsonify({"error": "Missing 'folder_id' in request body"}), 400
@@ -105,9 +106,9 @@ def process():
 
     try:
         if ota == "booking":
-            result = _run_booking_pipeline(folder_id, output_folder_id, processing_date, date_str)
+            result = _run_booking_pipeline(folder_id, processing_date, date_str)
         else:
-            result = _run_airbnb_pipeline(folder_id, output_folder_id, processing_date, date_str)
+            result = _run_airbnb_pipeline(folder_id, processing_date, date_str)
     except Exception as exc:
         logger.exception("Pipeline failed: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -119,7 +120,7 @@ def process():
 # Booking pipeline
 # ---------------------------------------------------------------------------
 
-def _run_booking_pipeline(folder_id: str, output_folder_id: str, processing_date, date_str: str) -> dict:
+def _run_booking_pipeline(folder_id: str, processing_date, date_str: str) -> dict:
     drive = DriveClient()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -156,7 +157,7 @@ def _run_booking_pipeline(folder_id: str, output_folder_id: str, processing_date
         warnings = [a for a in anomalies if a.severity == Severity.WARNING]
 
         if blocking:
-            logger.error("%d blocking anomaly/ies — Excel NOT generated.", len(blocking))
+            logger.error("%d blocking anomaly/ies — PennyLane NOT posted.", len(blocking))
             return {
                 "status":           "blocked",
                 "reservations":     len(processed),
@@ -166,26 +167,19 @@ def _run_booking_pipeline(folder_id: str, output_folder_id: str, processing_date
                 "blocking_details": [a.message for a in blocking],
             }
 
-        # Step 7: create Excel and upload
-        excel_filename = f"booking_{date_str}.xlsx"
-        excel_path     = tmp / excel_filename
-        create_excel_workbook(entries, anomalies, processed, excel_path)
-
-        dated_folder_id = drive.get_or_create_folder(output_folder_id, date_str)
-        file_id = drive.upload_excel(excel_path, dated_folder_id, excel_filename)
-
+        # Step 7: post to PennyLane
+        pl_result = _get_pennylane_client().post_ledger_entry(entries)
         logger.info(
-            "Done — %d reservations, %d warnings, balance_ok=%s, Excel id=%s",
-            len(processed), len(warnings), balance_ok, file_id,
+            "Done — %d reservations, %d warnings, balance_ok=%s, PennyLane id=%s",
+            len(processed), len(warnings), balance_ok, pl_result.get("id"),
         )
         return {
-            "status":         "ok",
-            "reservations":   len(processed),
-            "warnings":       len(warnings),
-            "blocking":       0,
-            "balance_ok":     balance_ok,
-            "excel_file_id":  file_id,
-            "excel_filename": excel_filename,
+            "status":              "ok",
+            "reservations":        len(processed),
+            "warnings":            len(warnings),
+            "blocking":            0,
+            "balance_ok":          balance_ok,
+            "pennylane_entry_id":  pl_result.get("id"),
         }
 
 
@@ -193,7 +187,7 @@ def _run_booking_pipeline(folder_id: str, output_folder_id: str, processing_date
 # Airbnb pipeline
 # ---------------------------------------------------------------------------
 
-def _run_airbnb_pipeline(folder_id: str, output_folder_id: str, processing_date, date_str: str) -> dict:
+def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str) -> dict:
     drive = DriveClient()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -221,8 +215,8 @@ def _run_airbnb_pipeline(folder_id: str, output_folder_id: str, processing_date,
         if not batches:
             return {"status": "skipped", "reason": "No payout batches found in the Airbnb file."}
 
-        # Step 4: generate entries per batch
-        all_entries = []
+        # Step 4: generate entries per batch (keep per-batch for PennyLane posting)
+        per_batch_entries = []
         all_processed = []
         for batch in batches:
             batch_entries, batch_processed, entry_anomalies = generate_entries(
@@ -237,7 +231,7 @@ def _run_airbnb_pipeline(folder_id: str, output_folder_id: str, processing_date,
                 ota_label="AIRBNB",
             )
             anomalies.extend(entry_anomalies)
-            all_entries.extend(batch_entries)
+            per_batch_entries.append(batch_entries)
             all_processed.extend(batch_processed)
 
         # Step 5: per-reservation validation
@@ -251,7 +245,7 @@ def _run_airbnb_pipeline(folder_id: str, output_folder_id: str, processing_date,
         warnings = [a for a in anomalies if a.severity == Severity.WARNING]
 
         if blocking:
-            logger.error("%d blocking anomaly/ies — Excel NOT generated.", len(blocking))
+            logger.error("%d blocking anomaly/ies — PennyLane NOT posted.", len(blocking))
             return {
                 "status":           "blocked",
                 "reservations":     len(all_processed),
@@ -261,32 +255,32 @@ def _run_airbnb_pipeline(folder_id: str, output_folder_id: str, processing_date,
                 "blocking_details": [a.message for a in blocking],
             }
 
-        # Step 7: create Excel and upload
-        excel_filename = f"airbnb_{date_str}.xlsx"
-        excel_path     = tmp / excel_filename
-        create_excel_workbook(all_entries, anomalies, all_processed, excel_path)
-
-        dated_folder_id = drive.get_or_create_folder(output_folder_id, date_str)
-        file_id = drive.upload_excel(excel_path, dated_folder_id, excel_filename)
-
+        # Step 7: post each payout batch to PennyLane
+        pl_results = _get_pennylane_client().post_batches(per_batch_entries)
         logger.info(
-            "Done — %d reservations, %d warnings, balance_ok=%s, Excel id=%s",
-            len(all_processed), len(warnings), balance_ok, file_id,
+            "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
+            len(all_processed), len(warnings), balance_ok, len(pl_results),
         )
         return {
-            "status":         "ok",
-            "reservations":   len(all_processed),
-            "warnings":       len(warnings),
-            "blocking":       0,
-            "balance_ok":     balance_ok,
-            "excel_file_id":  file_id,
-            "excel_filename": excel_filename,
+            "status":                   "ok",
+            "reservations":             len(all_processed),
+            "warnings":                 len(warnings),
+            "blocking":                 0,
+            "balance_ok":               balance_ok,
+            "pennylane_batches_posted": len(pl_results),
         }
 
 
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
+def _get_pennylane_client() -> PennyLaneClient:
+    token = os.environ.get("PENNYLANE_TOKEN")
+    if not token:
+        raise ValueError("PENNYLANE_TOKEN environment variable not set.")
+    return PennyLaneClient(token=token)
+
 
 def _check_global_balance(processed, anomalies):
     """Run the global balance check and return (balance_ok, updated_anomalies)."""

@@ -56,3 +56,24 @@ BOOKING_DATE_FORMATS = ["%b %d %Y", "%b %d, %Y"]
 
 # Output date format used in PennyLane CSV and labels
 PENNYLANE_DATE_FORMAT = "%d/%m/%Y"
+
+# === PennyLane API — IDs numériques (résolus le 2026-03-17) ===
+# Résolution via GET /api/external/v2/journals et /ledger_accounts
+
+PENNYLANE_JOURNAL_IDS = {
+    "BOOK": 3621237,
+    "AIRB": 3621262,
+}
+
+PENNYLANE_ACCOUNT_IDS = {
+    # Booking
+    "411BOOKING":       760098756,
+    "401BOOKING":       756231429,  # Commissions Booking — TODO: confirmer vs 604601
+    # Airbnb
+    "411AIRBNB":        671112489,
+    "401AIRBNB":        671113615,  # → PennyLane "6046" (sous-traitance Airbnb)
+    "604610":           671113726,  # → PennyLane "60461" (frais annulation) — TODO: confirmer doublon (3 IDs: 671113726, 671113826, 1044147273)
+    # Banque — compte différent selon OTA (même code interne "51105000")
+    "51105000_BOOK":    671113821,  # → 51105  BOOKING
+    "51105000_AIRB":    671113820,  # → 51104  AIR BNB
+}

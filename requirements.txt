@@ -16,5 +16,8 @@ gspread>=6.0.0
 flask>=3.0.0
 gunicorn>=21.0.0
 
+# PennyLane API client
+requests>=2.31.0
+
 # Development / testing
 pytest>=7.0.0
