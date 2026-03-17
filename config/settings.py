@@ -16,7 +16,7 @@ ACCOUNT_BANK = "51105000"        # Bank account (debited for net payout)
 AIRBNB_JOURNAL_CODE = "AIRB"
 
 AIRBNB_ACCOUNT_CLIENT = "411AIRBNB"    # Client receivable (Airbnb)
-AIRBNB_ACCOUNT_SUPPLIER = "401AIRBNB"  # Supplier payable — Airbnb host service fees
+AIRBNB_ACCOUNT_SUPPLIER = "604600"     # Direct charge — Airbnb issues 1 invoice per resa (no 401 intermediate)
 AIRBNB_ACCOUNT_BANK = "51105000"       # Same bank account
 
 # Airbnb Excel row types to include in accounting entries
@@ -68,11 +68,11 @@ PENNYLANE_JOURNAL_IDS = {
 PENNYLANE_ACCOUNT_IDS = {
     # Booking
     "411BOOKING":       760098756,
-    "401BOOKING":       756231429,  # Commissions Booking — TODO: confirmer vs 604601
+    "401BOOKING":       756231429,  # Commissions Booking — fournisseur (facture mensuelle / appart)
     # Airbnb
     "411AIRBNB":        671112489,
-    "401AIRBNB":        671113615,  # → PennyLane "6046" (sous-traitance Airbnb)
-    "604610":           671113726,  # → PennyLane "60461" (frais annulation) — TODO: confirmer doublon (3 IDs: 671113726, 671113826, 1044147273)
+    "604600":           671113615,  # Commissions Airbnb — charge directe (PennyLane "6046")
+    "604610":           671113726,  # Frais d'annulation Airbnb (PennyLane "60461")
     # Banque — compte différent selon OTA (même code interne "51105000")
     "51105000_BOOK":    671113821,  # → 51105  BOOKING
     "51105000_AIRB":    671113820,  # → 51104  AIR BNB
