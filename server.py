@@ -86,6 +86,7 @@ def process():
     folder_id = body.get("folder_id")
     date_str  = body.get("date")
     ota       = body.get("ota", "booking")
+    test_mode = bool(body.get("test", False))
 
     if not folder_id:
         return jsonify({"error": "Missing 'folder_id' in request body"}), 400
@@ -106,9 +107,9 @@ def process():
 
     try:
         if ota == "booking":
-            result = _run_booking_pipeline(folder_id, processing_date, date_str)
+            result = _run_booking_pipeline(folder_id, processing_date, date_str, test_mode)
         else:
-            result = _run_airbnb_pipeline(folder_id, processing_date, date_str)
+            result = _run_airbnb_pipeline(folder_id, processing_date, date_str, test_mode)
     except Exception as exc:
         logger.exception("Pipeline failed: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -120,7 +121,7 @@ def process():
 # Booking pipeline
 # ---------------------------------------------------------------------------
 
-def _run_booking_pipeline(folder_id: str, processing_date, date_str: str) -> dict:
+def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False) -> dict:
     drive = DriveClient()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -168,6 +169,8 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str) -> dic
             }
 
         # Step 7: post to PennyLane
+        if test_mode:
+            entries[0].label = "[TEST] " + entries[0].label
         pl_result = _get_pennylane_client().post_ledger_entry(entries)
         logger.info(
             "Done — %d reservations, %d warnings, balance_ok=%s, PennyLane id=%s",
@@ -187,7 +190,7 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str) -> dic
 # Airbnb pipeline
 # ---------------------------------------------------------------------------
 
-def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str) -> dict:
+def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False) -> dict:
     drive = DriveClient()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -256,6 +259,10 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str) -> dict
             }
 
         # Step 7: post each payout batch to PennyLane
+        if test_mode:
+            for batch in per_batch_entries:
+                if batch:
+                    batch[0].label = "[TEST] " + batch[0].label
         pl_results = _get_pennylane_client().post_batches(per_batch_entries)
         logger.info(
             "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
