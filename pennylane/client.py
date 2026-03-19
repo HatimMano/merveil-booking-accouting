@@ -1,6 +1,7 @@
 """PennyLane API client — posts accounting entries via the v2 API."""
 
 import logging
+import time
 from typing import List
 
 import requests
@@ -116,12 +117,15 @@ class PennyLaneClient:
         self,
         batches: List[List[AccountingEntry]],
         dry_run: bool = False,
+        delay: float = 0.5,
     ) -> List[dict]:
         """Post multiple entry batches sequentially. Returns one result per batch."""
         results = []
         for i, batch in enumerate(batches, 1):
             logger.info("Posting batch %d/%d (%d lines)...", i, len(batches), len(batch))
             results.append(self.post_ledger_entry(batch, dry_run=dry_run))
+            if not dry_run and i < len(batches):
+                time.sleep(delay)
         return results
 
     # ------------------------------------------------------------------
