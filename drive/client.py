@@ -248,6 +248,80 @@ class DriveClient:
         logger.info("Created subfolder '%s' → %s", name, folder["id"])
         return folder["id"]
 
+    def move_file(self, file_id: str, new_parent_id: str, old_parent_id: str) -> None:
+        """Move a Drive file from *old_parent_id* to *new_parent_id*."""
+        self._service.files().update(
+            fileId=file_id,
+            addParents=new_parent_id,
+            removeParents=old_parent_id,
+            supportsAllDrives=True,
+            fields="id, parents",
+        ).execute()
+        logger.debug("Moved file %s → folder %s", file_id, new_parent_id)
+
+    def create_anomaly_sheet(self, folder_id: str, name: str, rows: list) -> str:
+        """
+        Create (or replace) a Google Sheet named *name* in *folder_id*.
+
+        *rows* is a list of lists (first row = header).
+        The sheet is created by uploading a CSV that Drive converts to Google Sheets format.
+        Returns the Drive file ID.
+        """
+        import csv
+        import io
+        import tempfile
+
+        # Build CSV content in memory
+        buf = io.StringIO()
+        csv.writer(buf).writerows(rows)
+        csv_bytes = buf.getvalue().encode("utf-8")
+
+        # Delete any existing sheet with the same name
+        query = (
+            f"'{folder_id}' in parents"
+            f" and name='{name}'"
+            f" and mimeType='{_MIME_GSHEET}'"
+            f" and trashed=false"
+        )
+        existing = (
+            self._service.files()
+            .list(
+                q=query,
+                fields="files(id)",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            )
+            .execute()
+            .get("files", [])
+        )
+        for f in existing:
+            self._service.files().delete(fileId=f["id"], supportsAllDrives=True).execute()
+            logger.debug("Deleted existing anomaly sheet id=%s", f["id"])
+
+        # Write CSV to a temp file and upload, letting Drive convert to Google Sheets
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="wb") as tmp:
+            tmp.write(csv_bytes)
+            tmp_path = Path(tmp.name)
+
+        try:
+            metadata = {"name": name, "mimeType": _MIME_GSHEET, "parents": [folder_id]}
+            media = MediaFileUpload(str(tmp_path), mimetype="text/csv", resumable=False)
+            result = (
+                self._service.files()
+                .create(
+                    body=metadata,
+                    media_body=media,
+                    fields="id",
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        logger.info("Created anomaly sheet '%s' → id=%s", name, result["id"])
+        return result["id"]
+
     def upload_excel(self, local_path: Path, folder_id: str, filename: str) -> str:
         """
         Upload *local_path* as *filename* to *folder_id*.

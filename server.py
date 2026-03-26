@@ -87,6 +87,7 @@ def process():
     date_str  = body.get("date")
     ota       = body.get("ota", "booking")
     test_mode = bool(body.get("test", False))
+    dry_run   = bool(body.get("dry_run", False))
 
     if not folder_id:
         return jsonify({"error": "Missing 'folder_id' in request body"}), 400
@@ -107,9 +108,9 @@ def process():
 
     try:
         if ota == "booking":
-            result = _run_booking_pipeline(folder_id, processing_date, date_str, test_mode)
+            result = _run_booking_pipeline(folder_id, processing_date, date_str, test_mode, dry_run)
         else:
-            result = _run_airbnb_pipeline(folder_id, processing_date, date_str, test_mode)
+            result = _run_airbnb_pipeline(folder_id, processing_date, date_str, test_mode, dry_run)
     except Exception as exc:
         logger.exception("Pipeline failed: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -121,17 +122,19 @@ def process():
 # Booking pipeline
 # ---------------------------------------------------------------------------
 
-def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False) -> dict:
+def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False, dry_run: bool = False) -> dict:
     drive = DriveClient()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         csv_dir = tmp / "csv_input"
 
-        # Step 1: download CSVs from Drive
-        local_csvs = drive.download_all_csvs(folder_id, csv_dir)
-        if not local_csvs:
+        # Step 1: list CSVs (collect IDs for archiving) then download
+        csv_metas = drive.list_csv_files(folder_id)
+        if not csv_metas:
             return {"status": "skipped", "reason": "No CSV files found in the Drive folder."}
+        csv_file_ids = [f["id"] for f in csv_metas]
+        drive.download_all_csvs(folder_id, csv_dir)
 
         # Step 2: load mapping
         mapping = load_mapping(_BOOKING_MAPPING_PATH)
@@ -159,6 +162,8 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
 
         if blocking:
             logger.error("%d blocking anomaly/ies — PennyLane NOT posted.", len(blocking))
+            if not dry_run and not test_mode:
+                _archive_run(drive, folder_id, date_str, csv_file_ids, anomalies, "booking")
             return {
                 "status":           "blocked",
                 "reservations":     len(processed),
@@ -168,7 +173,17 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
                 "blocking_details": [a.message for a in blocking],
             }
 
-        # Step 7: post to PennyLane
+        # Step 7: post to PennyLane (skipped in dry_run)
+        if dry_run:
+            logger.info("dry_run=True — PennyLane NOT posted. %d entries ready.", len(entries))
+            return {
+                "status":       "dry_run",
+                "reservations": len(processed),
+                "warnings":     len(warnings),
+                "blocking":     0,
+                "balance_ok":   balance_ok,
+                "entries":      len(entries),
+            }
         if test_mode:
             entries[0].label = "[TEST] " + entries[0].label
         pl_result = _get_pennylane_client().post_ledger_entry(entries)
@@ -176,6 +191,7 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
             "Done — %d reservations, %d warnings, balance_ok=%s, PennyLane id=%s",
             len(processed), len(warnings), balance_ok, pl_result.get("id"),
         )
+        _archive_run(drive, folder_id, date_str, csv_file_ids, warnings, "booking")
         return {
             "status":              "ok",
             "reservations":        len(processed),
@@ -190,19 +206,25 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
 # Airbnb pipeline
 # ---------------------------------------------------------------------------
 
-def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False) -> dict:
+def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False, dry_run: bool = False) -> dict:
     drive = DriveClient()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
 
-        # Step 1: download the Airbnb .xlsx from Drive
+        # Step 1: download the Airbnb .xlsx from Drive (exactly 1 file expected in root)
         xlsx_files = drive.list_excel_files(folder_id)
         if not xlsx_files:
             return {"status": "skipped", "reason": "No .xlsx file found in the Drive folder."}
+        if len(xlsx_files) > 1:
+            names = ", ".join(f["name"] for f in xlsx_files)
+            return {
+                "status": "error",
+                "reason": f"{len(xlsx_files)} fichiers xlsx trouvés dans le dossier ({names}) — déposez un seul fichier à la fois.",
+            }
 
-        xlsx_meta = xlsx_files[0]  # most recent (list_excel_files orders by modifiedTime desc)
-        # Always save locally as .xlsx (export handles Google Sheets → xlsx conversion)
+        xlsx_meta = xlsx_files[0]
+        xlsx_file_id = xlsx_meta["id"]
         local_name = xlsx_meta["name"] if xlsx_meta["name"].endswith(".xlsx") else xlsx_meta["name"] + ".xlsx"
         local_xlsx = tmp / local_name
         drive.download_file(xlsx_meta["id"], local_xlsx, mime_type=xlsx_meta.get("mimeType"))
@@ -214,6 +236,20 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
         # Step 3: parse into payout batches
         parser = AirbnbParser()
         batches, anomalies = parser.parse_into_batches(local_xlsx)
+
+        # Enrich NON_EUR anomalies with code_comptable + PennyLane label
+        for a in anomalies:
+            if a.type == "NON_EUR_CURRENCY":
+                logement = a.details.get("logement", "")
+                code = mapping.get(logement, logement)
+                checkout = a.details.get("checkout_date", "")
+                voyageur = a.details.get("voyageur", "")
+                row_type = a.details.get("row_type", "")
+                ref = a.reservation_ref or ""
+                a.details["code_comptable"] = code
+                a.details["label_pennylane"] = (
+                    f"{code} - AIRBNB - CO : {checkout} - {voyageur} - {row_type} - {ref}"
+                )
 
         if not batches:
             return {"status": "skipped", "reason": "No payout batches found in the Airbnb file."}
@@ -249,6 +285,8 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
 
         if blocking:
             logger.error("%d blocking anomaly/ies — PennyLane NOT posted.", len(blocking))
+            if not dry_run and not test_mode:
+                _archive_run(drive, folder_id, date_str, [xlsx_file_id], anomalies, "airbnb")
             return {
                 "status":           "blocked",
                 "reservations":     len(all_processed),
@@ -258,7 +296,19 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
                 "blocking_details": [a.message for a in blocking],
             }
 
-        # Step 7: post each payout batch to PennyLane
+        # Step 7: post each payout batch to PennyLane (skipped in dry_run)
+        if dry_run:
+            total_entries = sum(len(b) for b in per_batch_entries)
+            logger.info("dry_run=True — PennyLane NOT posted. %d batches / %d entries ready.", len(per_batch_entries), total_entries)
+            return {
+                "status":       "dry_run",
+                "reservations": len(all_processed),
+                "warnings":     len(warnings),
+                "blocking":     0,
+                "balance_ok":   balance_ok,
+                "batches":      len(per_batch_entries),
+                "entries":      total_entries,
+            }
         if test_mode:
             for batch in per_batch_entries:
                 if batch:
@@ -268,6 +318,7 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
             "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
             len(all_processed), len(warnings), balance_ok, len(pl_results),
         )
+        _archive_run(drive, folder_id, date_str, [xlsx_file_id], warnings, "airbnb")
         return {
             "status":                   "ok",
             "reservations":             len(all_processed),
@@ -281,6 +332,50 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
+def _archive_run(drive, folder_id: str, date_str: str, file_ids: list, anomalies: list, ota: str) -> None:
+    """Create Archive subfolder, move source files into it, create anomaly sheet if needed."""
+    try:
+        archive_id = drive.get_or_create_folder(folder_id, f"Archive {date_str}")
+    except Exception as exc:
+        logger.warning("Could not create archive folder: %s", exc)
+        return
+    for fid in file_ids:
+        try:
+            drive.move_file(fid, archive_id, folder_id)
+        except Exception as exc:
+            logger.warning("Could not move file %s to archive: %s", fid, exc)
+    if anomalies:
+        _post_anomaly_sheet(drive, archive_id, anomalies, ota)
+
+
+def _post_anomaly_sheet(drive, folder_id: str, anomalies: list, ota: str) -> None:
+    """Create/replace an anomaly Google Sheet in *folder_id*."""
+    header = [
+        "Sévérité", "Type", "Référence réservation",
+        "Libellé PennyLane", "Montant", "Devise",
+        "Message", "Fichier source",
+    ]
+    rows = [header] + [
+        [
+            a.severity,
+            a.type,
+            a.reservation_ref or "",
+            a.details.get("label_pennylane", ""),
+            a.details.get("montant", ""),
+            a.details.get("currency", ""),
+            a.message,
+            a.source_file,
+        ]
+        for a in anomalies
+    ]
+    sheet_name = f"Anomalies {ota.upper()}"
+    try:
+        drive.create_anomaly_sheet(folder_id, sheet_name, rows)
+        logger.info("Anomaly sheet created: '%s' (%d row(s))", sheet_name, len(rows) - 1)
+    except Exception as exc:
+        logger.warning("Could not create anomaly sheet: %s", exc)
+
 
 def _get_pennylane_client() -> PennyLaneClient:
     token = os.environ.get("PENNYLANE_TOKEN")

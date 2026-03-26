@@ -353,16 +353,27 @@ class AirbnbParser(OTAParser):
             return None, anomalies
 
         if currency not in SUPPORTED_CURRENCIES:
+            nuits_for_label = int(nuits_raw) if nuits_raw is not None else 0
+            checkout_str = ""
+            if check_in_dt is not None:
+                checkout_str = (check_in_dt + timedelta(days=max(nuits_for_label, 1))).strftime("%d/%m/%Y")
             anomalies.append(Anomaly(
                 type=AnomalyType.NON_EUR_CURRENCY,
-                severity=Severity.BLOCKING,
+                severity=Severity.WARNING,
                 message=(
-                    f"Row {row_num}: unsupported currency '{currency}' "
-                    f"for reservation '{conf_code}'"
+                    f"Row {row_num}: devise non-EUR '{currency}' "
+                    f"pour la réservation '{conf_code}' — ligne exclue, correction manuelle requise"
                 ),
                 source_file=filename,
                 reservation_ref=conf_code or None,
-                details={"currency": currency},
+                details={
+                    "currency": currency,
+                    "montant": str(montant_raw),
+                    "logement": logement,
+                    "voyageur": voyageur,
+                    "checkout_date": checkout_str,
+                    "row_type": row_type,
+                },
             ))
             return None, anomalies
 
