@@ -1,9 +1,10 @@
-"""Parser for Booking.com CSV exports from the extranet."""
+"""Parser for Booking.com exports (CSV legacy + Excel weekly)."""
 
 import csv
 import logging
 import re
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -13,6 +14,11 @@ from config.settings import (
     BOOKING_FILENAME_PATTERN,
     SUPPORTED_CURRENCIES,
 )
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None  # type: ignore
 from models.reservation import Reservation
 from parsers.base import OTAParser
 from validators.anomalies import Anomaly, AnomalyType, Severity
@@ -349,3 +355,265 @@ class BookingParser(OTAParser):
             len(csv_files), len(all_reservations), len(all_anomalies),
         )
         return all_reservations, all_anomalies
+
+
+# ---------------------------------------------------------------------------
+# BookingPayoutBatch — data model for the Excel parser
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BookingPayoutBatch:
+    """A group of Booking.com reservations sharing the same payout identifier."""
+    payout_id: str
+    payout_date: date
+    reservations: List[Reservation]
+
+
+# ---------------------------------------------------------------------------
+# Helper for Excel cell values
+# ---------------------------------------------------------------------------
+
+def _cell_to_decimal(value) -> Optional[Decimal]:
+    """Convert an openpyxl cell value (float, int, str, None) to Decimal."""
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# BookingExcelParser
+# ---------------------------------------------------------------------------
+
+class BookingExcelParser(OTAParser):
+    """
+    Parser for Booking.com weekly Excel exports.
+
+    File format (one sheet, header on row 0):
+      Col 0:  Ref Appart         — numeric apartment ID (float in Excel)
+      Col 1:  Type               — "Reservation" or "Commission adjustment"
+      Col 2:  Numéro de référence
+      Col 3:  Date de départ     — checkout date ("Mar 19, 2026")
+      Col 4:  Nom du client
+      Col 5:  Statut             — "ok" / "cancelled"
+      Col 6:  Devise             — "EUR"
+      Col 7:  Statut du paiement — "by_booking" / "Paid Online"
+      Col 8:  Montant            — gross amount (positive)
+      Col 9:  Commission         — negative
+      Col 10: Coûts de transaction (payment_charge) — negative
+      Col 11: Taxe de séjour (city_tax) — negative
+      Col 12: (empty)
+      Col 13: Net
+      Col 14: Date du paiement
+      Col 15: Identifiant du paiement (payout_id)
+
+    Rows are grouped by payout_id to form payout batches.
+    """
+
+    SUPPORTED_TYPES = {"Reservation", "Commission adjustment"}
+
+    def parse_file(self, path: Path) -> Tuple[List[Reservation], List[Anomaly]]:
+        batches, anomalies = self.parse_into_batches(path)
+        return [r for b in batches for r in b.reservations], anomalies
+
+    def parse_directory(self, path: Path) -> Tuple[List[Reservation], List[Anomaly]]:
+        xlsx_files = sorted(path.glob("*.xlsx"))
+        if not xlsx_files:
+            return [], []
+        return self.parse_file(xlsx_files[0])
+
+    def parse_into_batches(
+        self, path: Path
+    ) -> Tuple[List[BookingPayoutBatch], List[Anomaly]]:
+        if openpyxl is None:
+            raise ImportError(
+                "openpyxl is required to parse Booking Excel files. "
+                "Install it with: pip install openpyxl"
+            )
+
+        anomalies: List[Anomaly] = []
+        filename = path.name
+
+        try:
+            wb = openpyxl.load_workbook(path, data_only=True)
+        except Exception as exc:
+            anomalies.append(Anomaly(
+                type=AnomalyType.FILE_BAD_NAME,
+                severity=Severity.BLOCKING,
+                message=f"Cannot open Booking Excel file '{filename}': {exc}",
+                source_file=filename,
+                reservation_ref=None,
+                details={"error": str(exc)},
+            ))
+            return [], anomalies
+
+        ws = wb.active
+        all_rows = list(ws.iter_rows(values_only=True))
+        if len(all_rows) < 2:
+            anomalies.append(Anomaly(
+                type=AnomalyType.FILE_EMPTY,
+                severity=Severity.WARNING,
+                message=f"Booking Excel file has no data rows: {filename}",
+                source_file=filename,
+                reservation_ref=None,
+                details={},
+            ))
+            return [], anomalies
+
+        data_rows = all_rows[1:]  # skip header
+
+        # Group reservations by payout_id (col 15), preserving row order
+        batches_map: Dict[str, List[Reservation]] = {}
+        payout_dates: Dict[str, Optional[date]] = {}
+
+        for row_num, row in enumerate(data_rows, start=2):
+            if all(c is None for c in row):
+                continue
+
+            row_type = row[1]
+            if not row_type or row_type not in self.SUPPORTED_TYPES:
+                if row_type:
+                    logger.debug("Row %d: ignoring type '%s'", row_num, row_type)
+                continue
+
+            payout_id = str(row[15] or "").strip()
+            if not payout_id:
+                continue
+
+            if payout_id not in payout_dates:
+                pd_raw = row[14]
+                payout_dates[payout_id] = _parse_booking_date(str(pd_raw)) if pd_raw else None
+
+            payout_date = payout_dates[payout_id]
+            if payout_date is None:
+                anomalies.append(Anomaly(
+                    type=AnomalyType.AMOUNT_MISMATCH,
+                    severity=Severity.WARNING,
+                    message=f"Row {row_num}: cannot parse payout date '{row[14]}' — row skipped",
+                    source_file=filename,
+                    reservation_ref=str(row[2] or ""),
+                    details={"row": row_num},
+                ))
+                continue
+
+            res, res_anomalies = self._parse_row(row, row_num, filename, payout_id, payout_date)
+            anomalies.extend(res_anomalies)
+            if res is not None:
+                if payout_id not in batches_map:
+                    batches_map[payout_id] = []
+                batches_map[payout_id].append(res)
+
+        batches = [
+            BookingPayoutBatch(
+                payout_id=pid,
+                payout_date=payout_dates[pid],
+                reservations=reservations,
+            )
+            for pid, reservations in batches_map.items()
+        ]
+
+        logger.info(
+            "Parsed Booking Excel '%s': %d payout batch(es), %d reservation(s), %d anomaly(ies)",
+            filename,
+            len(batches),
+            sum(len(b.reservations) for b in batches),
+            len(anomalies),
+        )
+        return batches, anomalies
+
+    def _parse_row(
+        self,
+        row: tuple,
+        row_num: int,
+        filename: str,
+        payout_id: str,
+        payout_date: date,
+    ) -> Tuple[Optional[Reservation], List[Anomaly]]:
+        anomalies: List[Anomaly] = []
+        row_type = str(row[1] or "")
+
+        # Ref Appart: float in Excel (e.g. 6698991.0) → "6698991"
+        if row[0] is None:
+            anomalies.append(Anomaly(
+                type=AnomalyType.MAPPING_NOT_FOUND,
+                severity=Severity.BLOCKING,
+                message=f"Row {row_num}: empty Ref Appart — row skipped",
+                source_file=filename,
+                reservation_ref=None,
+                details={"row": row_num},
+            ))
+            return None, anomalies
+        ref_appart = str(int(float(row[0])))
+        ref_num = str(int(float(row[2]))) if row[2] is not None else ""
+
+        # Financial amounts
+        amount         = _cell_to_decimal(row[8])  or Decimal("0")
+        commission     = _cell_to_decimal(row[9])  or Decimal("0")
+        payment_charge = _cell_to_decimal(row[10]) or Decimal("0")
+        city_tax       = _cell_to_decimal(row[11]) or Decimal("0")
+        net_raw        = _cell_to_decimal(row[13])
+
+        if row_type == "Commission adjustment":
+            net            = net_raw or Decimal("0")
+            amount         = net
+            commission     = Decimal("0")
+            payment_charge = Decimal("0")
+            city_tax       = Decimal("0")
+            guest_name     = "Ajustement commission"
+            status         = "ok"
+            currency       = "EUR"
+            payment_status = "by_booking"
+        else:
+            net            = net_raw if net_raw is not None else amount + commission + payment_charge + city_tax
+            guest_name     = str(row[4] or "").strip()
+            status         = str(row[5] or "ok").strip()
+            currency       = str(row[6] or "EUR").strip()
+            payment_status = str(row[7] or "by_booking").strip()
+
+        # Currency check
+        if currency not in SUPPORTED_CURRENCIES:
+            anomalies.append(Anomaly(
+                type=AnomalyType.NON_EUR_CURRENCY,
+                severity=Severity.WARNING,
+                message=f"Row {row_num}: devise non-EUR '{currency}' pour '{ref_num}' — ligne exclue",
+                source_file=filename,
+                reservation_ref=ref_num or None,
+                details={"currency": currency, "montant": str(amount)},
+            ))
+            return None, anomalies
+
+        # Checkout date (col 3) — check_in is not available in this export
+        checkout_raw = row[3]
+        checkout = _parse_booking_date(str(checkout_raw)) if checkout_raw else payout_date
+        check_in = checkout
+
+        if status != "ok" and amount != Decimal("0"):
+            anomalies.append(Anomaly(
+                type=AnomalyType.CANCELLED_WITH_AMOUNT,
+                severity=Severity.WARNING,
+                message=f"Reservation {ref_num} has status='{status}' but Amount={amount}",
+                source_file=filename,
+                reservation_ref=ref_num,
+                details={"status": status, "amount": str(amount)},
+            ))
+
+        return Reservation(
+            source_file=filename,
+            ref_appart=ref_appart,
+            payout_id=payout_id,
+            reference_number=ref_num,
+            check_in=check_in,
+            checkout=checkout,
+            guest_name=guest_name or "(inconnu)",
+            reservation_status=status,
+            currency=currency,
+            payment_status=payment_status,
+            city_tax=city_tax,
+            amount=amount,
+            commission=commission,
+            payment_charge=payment_charge,
+            net=net,
+            payout_date=payout_date,
+        ), anomalies

@@ -42,7 +42,7 @@ from config.settings import (
     AIRBNB_ACCOUNT_SUPPLIER,
     AIRBNB_ACCOUNT_CANCELLATION_FEE,
 )
-from parsers.booking import BookingParser
+from parsers.booking import BookingExcelParser
 from parsers.airbnb import AirbnbParser
 from accounting.entries import generate_entries
 from drive.client import DriveClient
@@ -127,35 +127,54 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
-        csv_dir = tmp / "csv_input"
 
-        # Step 1: list CSVs (collect IDs for archiving) then download
-        csv_metas = drive.list_csv_files(folder_id)
-        if not csv_metas:
-            return {"status": "skipped", "reason": "No CSV files found in the Drive folder."}
-        csv_file_ids = [f["id"] for f in csv_metas]
-        drive.download_all_csvs(folder_id, csv_dir)
+        # Step 1: download the Booking .xlsx from Drive (exactly 1 file expected)
+        xlsx_files = drive.list_excel_files(folder_id)
+        if not xlsx_files:
+            return {"status": "skipped", "reason": "No .xlsx file found in the Drive folder."}
+        if len(xlsx_files) > 1:
+            names = ", ".join(f["name"] for f in xlsx_files)
+            return {
+                "status": "error",
+                "reason": f"{len(xlsx_files)} fichiers xlsx trouvés ({names}) — déposez un seul fichier à la fois.",
+            }
+
+        xlsx_meta = xlsx_files[0]
+        xlsx_file_id = xlsx_meta["id"]
+        local_name = xlsx_meta["name"] if xlsx_meta["name"].endswith(".xlsx") else xlsx_meta["name"] + ".xlsx"
+        local_xlsx = tmp / local_name
+        drive.download_file(xlsx_meta["id"], local_xlsx, mime_type=xlsx_meta.get("mimeType"))
+        logger.info("Downloaded Booking file: %s (type: %s)", xlsx_meta["name"], xlsx_meta.get("mimeType"))
 
         # Step 2: load mapping
         mapping = load_mapping(_BOOKING_MAPPING_PATH)
 
-        # Step 3: parse
-        parser = BookingParser()
-        reservations, anomalies = parser.parse_directory(csv_dir)
-        anomalies.extend(check_duplicate_reservations(reservations))
+        # Step 3: parse into payout batches
+        parser = BookingExcelParser()
+        batches, anomalies = parser.parse_into_batches(local_xlsx)
+        all_reservations = [r for b in batches for r in b.reservations]
+        anomalies.extend(check_duplicate_reservations(all_reservations))
 
-        # Step 4: generate entries
-        entries, processed, entry_anomalies = generate_entries(
-            reservations, processing_date, mapping
-        )
-        anomalies.extend(entry_anomalies)
+        if not batches:
+            return {"status": "skipped", "reason": "No payout batches found in the Booking file."}
+
+        # Step 4: generate entries per batch
+        per_batch_entries = []
+        all_processed = []
+        for batch in batches:
+            batch_entries, batch_processed, entry_anomalies = generate_entries(
+                batch.reservations, processing_date, mapping
+            )
+            anomalies.extend(entry_anomalies)
+            per_batch_entries.append(batch_entries)
+            all_processed.extend(batch_processed)
 
         # Step 5: per-reservation validation
-        for r in processed:
+        for r in all_processed:
             anomalies.extend(validate_reservation_amounts(r))
 
         # Step 6: global balance check
-        balance_ok, anomalies = _check_global_balance(processed, anomalies)
+        balance_ok, anomalies = _check_global_balance(all_processed, anomalies)
 
         blocking = [a for a in anomalies if a.severity == Severity.BLOCKING]
         warnings = [a for a in anomalies if a.severity == Severity.WARNING]
@@ -163,42 +182,46 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
         if blocking:
             logger.error("%d blocking anomaly/ies — PennyLane NOT posted.", len(blocking))
             if not dry_run and not test_mode:
-                _archive_run(drive, folder_id, date_str, csv_file_ids, anomalies, "booking")
+                _archive_run(drive, folder_id, date_str, [xlsx_file_id], anomalies, "booking")
             return {
                 "status":           "blocked",
-                "reservations":     len(processed),
+                "reservations":     len(all_processed),
                 "blocking":         len(blocking),
                 "warnings":         len(warnings),
                 "balance_ok":       balance_ok,
                 "blocking_details": [a.message for a in blocking],
             }
 
-        # Step 7: post to PennyLane (skipped in dry_run)
+        # Step 7: post each payout batch to PennyLane (skipped in dry_run)
         if dry_run:
-            logger.info("dry_run=True — PennyLane NOT posted. %d entries ready.", len(entries))
+            total_entries = sum(len(b) for b in per_batch_entries)
+            logger.info("dry_run=True — PennyLane NOT posted. %d batches / %d entries ready.", len(per_batch_entries), total_entries)
             return {
                 "status":       "dry_run",
-                "reservations": len(processed),
+                "reservations": len(all_processed),
                 "warnings":     len(warnings),
                 "blocking":     0,
                 "balance_ok":   balance_ok,
-                "entries":      len(entries),
+                "batches":      len(per_batch_entries),
+                "entries":      total_entries,
             }
         if test_mode:
-            entries[0].label = "[TEST] " + entries[0].label
-        pl_result = _get_pennylane_client().post_ledger_entry(entries)
+            for batch in per_batch_entries:
+                if batch:
+                    batch[0].label = "[TEST] " + batch[0].label
+        pl_results = _get_pennylane_client().post_batches(per_batch_entries)
         logger.info(
-            "Done — %d reservations, %d warnings, balance_ok=%s, PennyLane id=%s",
-            len(processed), len(warnings), balance_ok, pl_result.get("id"),
+            "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
+            len(all_processed), len(warnings), balance_ok, len(pl_results),
         )
-        _archive_run(drive, folder_id, date_str, csv_file_ids, warnings, "booking")
+        _archive_run(drive, folder_id, date_str, [xlsx_file_id], warnings, "booking")
         return {
-            "status":              "ok",
-            "reservations":        len(processed),
-            "warnings":            len(warnings),
-            "blocking":            0,
-            "balance_ok":          balance_ok,
-            "pennylane_entry_id":  pl_result.get("id"),
+            "status":                   "ok",
+            "reservations":             len(all_processed),
+            "warnings":                 len(warnings),
+            "blocking":                 0,
+            "balance_ok":               balance_ok,
+            "pennylane_batches_posted": len(pl_results),
         }
 
 
