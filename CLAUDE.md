@@ -100,14 +100,38 @@ See `config/settings.py` for full mapping. Key codes:
         260327 - Import Paiements Booking.xlsx
 ```
 
+## Cloud Scheduler jobs
+Deux jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
+| Job | Schedule | OTA |
+|---|---|---|
+| `airbnb-pipeline-daily` | Tous les jours à 8h Paris | Airbnb |
+| `booking-pipeline-weekly` | Tous les lundis à 8h Paris | Booking |
+
+Les deux jobs sont **normalement en PAUSE** entre les runs mensuels/hebdomadaires. Workflow :
+1. Déposer le fichier xlsx dans le bon dossier Drive
+2. `gcloud scheduler jobs resume <job> --location=europe-west1`
+3. `gcloud scheduler jobs run <job> --location=europe-west1`
+4. Vérifier les logs Cloud Run
+5. `gcloud scheduler jobs pause <job> --location=europe-west1`
+
+Pour redéployer : `gcloud run deploy booking-pipeline --source . --region=europe-west1 --project=merveil-data-warehouse --quiet`
+Toujours commiter/pusher le mapping avant de déployer.
+
 ## Known issues / notes
 - SA must have **Organizer** role on the Shared Drive to move files uploaded by others
 - `list_excel_files()` in `drive/client.py` also returns Google Sheets natively converted → filter by extension handled at download time
 - `gcloud run services update-traffic` does NOT deploy a new image — always use `update --image`
+- Le mapping `CodeAppart_Compta.csv` doit être mis à jour et redéployé si un nouvel appartement Booking apparaît (`MAPPING_NOT_FOUND` = anomalie bloquante)
 
 ---
 
 ## Changelog
+
+### 2026-04-08 — Run mensuel Airbnb + Booking
+- Airbnb : 72 réservations, 11 batches, 0 warnings, balance OK
+- Booking : 59 réservations, 42 batches, 1 warning, balance OK
+- Fix mapping `CodeAppart_Compta.csv` (nouvel appartement) → redéploiement nécessaire avant run
+- Deploy cmd confirmé : `gcloud run deploy booking-pipeline --source . --region=europe-west1 --project=merveil-data-warehouse --quiet`
 
 ### 2026-03-27 — Booking pipeline migrated to Excel input
 - `BookingExcelParser` replaces the old multi-CSV `BookingParser`
