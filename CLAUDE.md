@@ -127,6 +127,12 @@ Toujours commiter/pusher le mapping avant de déployer.
 
 ## Changelog
 
+### 2026-04-13 — Libellés frais Booking par réservation
+- Débit `401BOOKING` éclaté en une ligne par réservation : `{code_comptable} - {ref_num} - FEE BOOKING - {date}`
+- Nécessaire pour lettrage avec les factures de commission Booking (demande expert comptable)
+- Airbnb inchangé (une ligne agrégée par batch)
+- Paramètre `per_reservation_fees=True` dans `generate_entries()` activé uniquement pour Booking
+
 ### 2026-04-08 — Run mensuel Airbnb + Booking
 - Airbnb : 72 réservations, 11 batches, 0 warnings, balance OK
 - Booking : 59 réservations, 42 batches, 1 warning, balance OK
