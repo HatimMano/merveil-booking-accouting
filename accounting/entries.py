@@ -69,6 +69,7 @@ def generate_entries(
     account_supplier: str = ACCOUNT_SUPPLIER,
     account_cancellation_fee: Optional[str] = None,
     ota_label: str = "BOOKING",
+    per_reservation_fees: bool = False,
 ) -> Tuple[List[AccountingEntry], List[Reservation], List[Anomaly]]:
     """
     Generate PennyLane accounting entries for a batch of reservations.
@@ -153,18 +154,33 @@ def generate_entries(
         credit=None if total_net >= 0 else -total_net,
     ))
 
-    # Header 2 — total OTA fees (commissions + payment charges)
-    # Normal: DEBIT supplier = total_fees (positive)
-    # Fee reimbursement: CREDIT supplier = |total_fees|
-    entries.append(AccountingEntry(
-        journal=journal_code,
-        date=processing_date,
-        ref_piece="",
-        account=account_supplier,
-        label=f"Frais + Payment Charge  - {payout_label}",
-        debit=total_fees if total_fees >= 0 else None,
-        credit=None if total_fees >= 0 else -total_fees,
-    ))
+    # Header 2 — OTA fees (commissions + payment charges)
+    # per_reservation_fees=True: one line per reservation (Booking — for commission invoice reconciliation)
+    # per_reservation_fees=False: one aggregate line per batch (Airbnb — default)
+    if per_reservation_fees:
+        for r in valid_reservations:
+            fee = -r.commission - r.payment_charge
+            if fee == Decimal("0"):
+                continue
+            entries.append(AccountingEntry(
+                journal=journal_code,
+                date=processing_date,
+                ref_piece="",
+                account=account_supplier,
+                label=f"{r.code_comptable} - {r.reference_number} - FEE {ota_label} - {payout_label}",
+                debit=fee if fee >= 0 else None,
+                credit=None if fee >= 0 else -fee,
+            ))
+    else:
+        entries.append(AccountingEntry(
+            journal=journal_code,
+            date=processing_date,
+            ref_piece="",
+            account=account_supplier,
+            label=f"Frais + Payment Charge  - {payout_label}",
+            debit=total_fees if total_fees >= 0 else None,
+            credit=None if total_fees >= 0 else -total_fees,
+        ))
 
     # Per-reservation entries
     # Normal reservation:   CREDIT account_client            = gross (positive)

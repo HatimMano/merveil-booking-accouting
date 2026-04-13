@@ -163,7 +163,8 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
         all_processed = []
         for batch in batches:
             batch_entries, batch_processed, entry_anomalies = generate_entries(
-                batch.reservations, processing_date, mapping
+                batch.reservations, processing_date, mapping,
+                per_reservation_fees=True,
             )
             anomalies.extend(entry_anomalies)
             per_batch_entries.append(batch_entries)
