@@ -182,9 +182,10 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
         warnings = [a for a in anomalies if a.severity == Severity.WARNING]
 
         if blocking:
+            file_date = max(b.payout_date for b in batches).strftime("%Y-%m-%d")
             logger.error("%d blocking anomaly/ies — PennyLane NOT posted.", len(blocking))
             if not dry_run and not test_mode:
-                _archive_run(drive, folder_id, date_str, [xlsx_file_id], anomalies, "booking")
+                _archive_run(drive, folder_id, file_date, [xlsx_file_id], anomalies, "booking")
             return {
                 "status":           "blocked",
                 "reservations":     len(all_processed),
@@ -216,7 +217,8 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
             "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
             len(all_processed), len(warnings), balance_ok, len(pl_results),
         )
-        _archive_run(drive, folder_id, date_str, [xlsx_file_id], warnings, "booking")
+        file_date = max(b.payout_date for b in batches).strftime("%Y-%m-%d")
+        _archive_run(drive, folder_id, file_date, [xlsx_file_id], warnings, "booking")
         return {
             "status":                   "ok",
             "reservations":             len(all_processed),
@@ -308,10 +310,11 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
         blocking = [a for a in anomalies if a.severity == Severity.BLOCKING]
         warnings = [a for a in anomalies if a.severity == Severity.WARNING]
 
+        file_date = max(b.payout_date for b in batches).strftime("%Y-%m-%d")
         if blocking:
             logger.error("%d blocking anomaly/ies — PennyLane NOT posted.", len(blocking))
             if not dry_run and not test_mode:
-                _archive_run(drive, folder_id, date_str, [xlsx_file_id], anomalies, "airbnb")
+                _archive_run(drive, folder_id, file_date, [xlsx_file_id], anomalies, "airbnb")
             return {
                 "status":           "blocked",
                 "reservations":     len(all_processed),
@@ -343,7 +346,7 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
             "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
             len(all_processed), len(warnings), balance_ok, len(pl_results),
         )
-        _archive_run(drive, folder_id, date_str, [xlsx_file_id], warnings, "airbnb")
+        _archive_run(drive, folder_id, file_date, [xlsx_file_id], warnings, "airbnb")
         return {
             "status":                   "ok",
             "reservations":             len(all_processed),
