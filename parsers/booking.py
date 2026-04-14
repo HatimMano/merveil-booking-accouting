@@ -30,14 +30,33 @@ logger = logging.getLogger(__name__)
 # Helper functions
 # ---------------------------------------------------------------------------
 
-def _parse_booking_date(date_str: str) -> Optional[datetime]:
+_FR_MONTHS = {
+    "janv.": 1, "févr.": 2, "mars": 3, "avr.": 4, "mai": 5, "juin": 6,
+    "juil.": 7, "août": 8, "sept.": 9, "oct.": 10, "nov.": 11, "déc.": 12,
+    "janvier": 1, "février": 2, "mars": 3, "avril": 4, "mai": 5, "juin": 6,
+    "juillet": 7, "août": 8, "septembre": 9, "octobre": 10, "novembre": 11, "décembre": 12,
+}
+
+
+def _parse_booking_date(date_str: str) -> Optional[date]:
     """
     Parse a Booking.com date string.
 
-    Accepts both 'Aug 28 2025' and 'Aug 28, 2025'.
+    Accepts English formats ('Aug 28 2025', 'Aug 28, 2025')
+    and French formats ('9 avr. 2026', '28 août 2025').
     Returns a date object, or None if the string cannot be parsed.
     """
     date_str = date_str.strip()
+
+    # French format: "9 avr. 2026" or "28 août 2025"
+    parts = date_str.split()
+    if len(parts) == 3 and parts[1].lower() in _FR_MONTHS:
+        try:
+            return date(int(parts[2]), _FR_MONTHS[parts[1].lower()], int(parts[0]))
+        except (ValueError, KeyError):
+            pass
+
+    # English formats from BOOKING_DATE_FORMATS
     for fmt in BOOKING_DATE_FORMATS:
         try:
             return datetime.strptime(date_str, fmt).date()
