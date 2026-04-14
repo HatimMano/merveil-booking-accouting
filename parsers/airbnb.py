@@ -49,11 +49,12 @@ def _to_date(value) -> Optional[date]:
 
 
 def _to_decimal(value) -> Optional[Decimal]:
-    """Convert a cell value (float, int, str, None) to Decimal."""
+    """Convert a cell value (float, int, str, None) to Decimal.
+    Handles French decimal format (comma separator, e.g. '-905,72')."""
     if value is None:
         return None
     try:
-        return Decimal(str(value))
+        return Decimal(str(value).replace(",", ".").replace("\xa0", "").replace(" ", ""))
     except (InvalidOperation, ValueError):
         return None
 
