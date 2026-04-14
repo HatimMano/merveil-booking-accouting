@@ -277,19 +277,7 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
                 )
 
         if not batches:
-            import openpyxl as _xl
-            _wb = _xl.load_workbook(local_xlsx, data_only=True)
-            _rows = list(_wb.active.iter_rows(values_only=True))
-            _header = next((r for r in _rows if r[1] == "Type"), None)
-            _first_data = _rows[(_rows.index(_header) + 2)] if _header else None
-            return {
-                "status": "skipped",
-                "reason": "No payout batches found in the Airbnb file.",
-                "anomalies_count": len(anomalies),
-                "anomalies_sample": [{"type": a.type, "severity": a.severity, "message": a.message} for a in anomalies[:3]],
-                "header": list(_header) if _header else None,
-                "first_data_row": [str(c) for c in _first_data] if _first_data else None,
-            }
+            return {"status": "skipped", "reason": "No payout batches found in the Airbnb file."}
 
         # Step 4: generate entries per batch (keep per-batch for PennyLane posting)
         per_batch_entries = []
