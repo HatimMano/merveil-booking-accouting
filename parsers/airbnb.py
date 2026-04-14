@@ -38,13 +38,21 @@ class AirbnbPayoutBatch:
 # ---------------------------------------------------------------------------
 
 def _to_date(value) -> Optional[date]:
-    """Convert a cell value (datetime or date) to a date object."""
+    """Convert a cell value (datetime, date, or string) to a date object.
+    Handles French format DD/MM/YYYY and ISO format YYYY-MM-DD."""
     if value is None:
         return None
     if hasattr(value, "date"):
         return value.date()
     if isinstance(value, date):
         return value
+    s = str(value).strip()
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            from datetime import datetime as dt
+            return dt.strptime(s, fmt).date()
+        except ValueError:
+            continue
     return None
 
 
