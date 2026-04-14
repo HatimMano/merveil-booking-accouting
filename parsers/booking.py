@@ -484,7 +484,14 @@ class BookingExcelParser(OTAParser):
 
             if payout_id not in payout_dates:
                 pd_raw = row[14]
-                payout_dates[payout_id] = _parse_booking_date(str(pd_raw)) if pd_raw else None
+                if isinstance(pd_raw, datetime):
+                    payout_dates[payout_id] = pd_raw.date()
+                elif isinstance(pd_raw, date):
+                    payout_dates[payout_id] = pd_raw
+                elif pd_raw:
+                    payout_dates[payout_id] = _parse_booking_date(str(pd_raw))
+                else:
+                    payout_dates[payout_id] = None
 
             payout_date = payout_dates[payout_id]
             if payout_date is None:
@@ -586,7 +593,14 @@ class BookingExcelParser(OTAParser):
 
         # Checkout date (col 3) — check_in is not available in this export
         checkout_raw = row[3]
-        checkout = _parse_booking_date(str(checkout_raw)) if checkout_raw else payout_date
+        if isinstance(checkout_raw, datetime):
+            checkout = checkout_raw.date()
+        elif isinstance(checkout_raw, date):
+            checkout = checkout_raw
+        elif checkout_raw:
+            checkout = _parse_booking_date(str(checkout_raw)) or payout_date
+        else:
+            checkout = payout_date
         check_in = checkout
 
         if status != "ok" and amount != Decimal("0"):
