@@ -172,9 +172,11 @@ class AirbnbParser(OTAParser):
 
         # --- Locate the header row (first row whose second cell == "Type") ---
         header_row_idx = None
+        col_map: dict = {}
         for i, row in enumerate(rows):
             if row[1] == "Type":
                 header_row_idx = i
+                col_map = {str(cell).strip(): j for j, cell in enumerate(row) if cell is not None}
                 break
 
         if header_row_idx is None:
@@ -187,6 +189,26 @@ class AirbnbParser(OTAParser):
                 details={},
             ))
             return [], anomalies
+
+        # Column index helpers (robust to extra/missing columns)
+        def _col(name: str, *fallbacks: str) -> int:
+            for n in (name, *fallbacks):
+                if n in col_map:
+                    return col_map[n]
+            return -1
+
+        COL_DATE     = _col("Date")
+        COL_TYPE     = _col("Type")
+        COL_REF      = _col("Code de référence", "Code de reference")
+        COL_DEVISE   = _col("Devise")
+        COL_MONTANT  = _col("Montant")
+        COL_VERSE    = _col("Versé", "Verse")
+        COL_FRAIS    = _col("Frais de service")
+        COL_CONF     = _col("Code de confirmation")
+        COL_DEBUT    = _col("Date de début", "Date de debut")
+        COL_NUITS    = _col("Nuits")
+        COL_VOYAGEUR = _col("Voyageur")
+        COL_LOGEMENT = _col("Logement")
 
         data_rows = rows[header_row_idx + 1 :]
 
@@ -202,7 +224,7 @@ class AirbnbParser(OTAParser):
             if all(cell is None for cell in row):
                 continue
 
-            row_type: Optional[str] = row[1]
+            row_type: Optional[str] = row[COL_TYPE] if COL_TYPE >= 0 else row[1]
             if not row_type:
                 continue
 
@@ -220,22 +242,23 @@ class AirbnbParser(OTAParser):
                     batches.append(batch)
 
                 # --- Start a new batch ---
-                current_payout_date = _to_date(row[0])
-                current_payout_ref = str(row[8] or "")
-                current_payout_amount = _to_decimal(row[11]) or Decimal("0")
+                current_payout_date = _to_date(row[COL_DATE] if COL_DATE >= 0 else row[0])
+                current_payout_ref = str(row[COL_REF] if COL_REF >= 0 and row[COL_REF] is not None else "")
+                current_payout_amount = _to_decimal(row[COL_VERSE] if COL_VERSE >= 0 else row[11]) or Decimal("0")
                 pending_reservations = []
 
             elif row_type in AIRBNB_RESERVATION_TYPES:
                 if current_payout_date is None:
-                    # Reservation before any Payout row — assign a dummy payout context
                     logger.warning(
                         "Row %d: reservation '%s' found before any Payout row — skipped",
-                        row_num, row[2],
+                        row_num, row[COL_CONF] if COL_CONF >= 0 else row[2],
                     )
                     continue
 
                 res, res_anomalies = self._parse_reservation_row(
-                    row, row_num, filename, current_payout_date, current_payout_ref
+                    row, row_num, filename, current_payout_date, current_payout_ref,
+                    COL_CONF, COL_DEBUT, COL_NUITS, COL_VOYAGEUR, COL_LOGEMENT,
+                    COL_DEVISE, COL_MONTANT, COL_FRAIS,
                 )
                 anomalies.extend(res_anomalies)
                 if res is not None:
@@ -316,27 +339,30 @@ class AirbnbParser(OTAParser):
         filename: str,
         payout_date: date,
         payout_ref: str,
+        COL_CONF: int = 2,
+        COL_DEBUT: int = 3,
+        COL_NUITS: int = 4,
+        COL_VOYAGEUR: int = 5,
+        COL_LOGEMENT: int = 6,
+        COL_DEVISE: int = 9,
+        COL_MONTANT: int = 10,
+        COL_FRAIS: int = 12,
     ) -> Tuple[Optional[Reservation], List[Anomaly]]:
-        """
-        Parse a single Airbnb reservation / adjustment row into a Reservation object.
-
-        Column order (0-based):
-          0=Date, 1=Type, 2=Code de confirmation, 3=Date de début, 4=Nuits,
-          5=Voyageur, 6=Logement, 7=Détails, 8=Code de référence, 9=Devise,
-          10=Montant, 11=Versé, 12=Frais de service, 13=Frais de ménage,
-          14=Année des revenus
-        """
+        """Parse a single Airbnb reservation / adjustment row into a Reservation object."""
         anomalies: List[Anomaly] = []
 
-        row_type    = row[1] or ""
-        conf_code   = str(row[2] or "").strip()
-        check_in_dt = _to_date(row[3])
-        nuits_raw   = row[4]
-        voyageur    = str(row[5] or "").strip()
-        logement    = str(row[6] or "").strip()
-        currency    = str(row[9] or "").strip()
-        montant_raw = _to_decimal(row[10])
-        frais_raw   = _to_decimal(row[12])
+        def _get(col: int):
+            return row[col] if 0 <= col < len(row) else None
+
+        row_type    = str(_get(1) or "")
+        conf_code   = str(_get(COL_CONF) or "").strip()
+        check_in_dt = _to_date(_get(COL_DEBUT))
+        nuits_raw   = _get(COL_NUITS)
+        voyageur    = str(_get(COL_VOYAGEUR) or "").strip()
+        logement    = str(_get(COL_LOGEMENT) or "").strip()
+        currency    = str(_get(COL_DEVISE) or "").strip()
+        montant_raw = _to_decimal(_get(COL_MONTANT))
+        frais_raw   = _to_decimal(_get(COL_FRAIS))
 
         # --- Validate ---
         if not logement:
