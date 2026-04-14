@@ -36,6 +36,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config.mapping_loader import load_mapping, load_airbnb_mapping
 from config.settings import (
+    DRIVE_FOLDER_BOOKING,
+    DRIVE_FOLDER_AIRBNB,
     AIRBNB_JOURNAL_CODE,
     AIRBNB_ACCOUNT_BANK,
     AIRBNB_ACCOUNT_CLIENT,
@@ -83,17 +85,16 @@ def health():
 @app.route("/process", methods=["POST"])
 def process():
     body = request.get_json(force=True, silent=True) or {}
-    folder_id = body.get("folder_id")
-    date_str  = body.get("date")
     ota       = body.get("ota", "booking")
     test_mode = bool(body.get("test", False))
     dry_run   = bool(body.get("dry_run", False))
-
-    if not folder_id:
-        return jsonify({"error": "Missing 'folder_id' in request body"}), 400
+    date_str  = body.get("date")
 
     if ota not in ("booking", "airbnb"):
         return jsonify({"error": f"Unsupported OTA '{ota}'. Use 'booking' or 'airbnb'."}), 400
+
+    default_folder = DRIVE_FOLDER_BOOKING if ota == "booking" else DRIVE_FOLDER_AIRBNB
+    folder_id = body.get("folder_id") or default_folder
 
     if not date_str or date_str == "AUTO":
         import zoneinfo

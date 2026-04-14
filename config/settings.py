@@ -37,6 +37,11 @@ AMOUNT_MISMATCH_TOLERANCE = Decimal("0.02")  # ±0.02€
 COMMISSION_HIGH_THRESHOLD = Decimal("0.20")  # 20% — above this triggers a warning
 COMMISSION_LOW_THRESHOLD = Decimal("0.10")   # 10% — below this triggers a warning
 
+# === Google Drive folder IDs (fixes — ne changent jamais) ===
+
+DRIVE_FOLDER_BOOKING = "1sTXjEQJZo6_DwTF_SMDumoNQTNINXMGe"
+DRIVE_FOLDER_AIRBNB  = "12RsIcw1tBXAAy8zYbLbrQqWStZ5Wpp1y"
+
 # === Supported values ===
 
 SUPPORTED_CURRENCIES = {"EUR"}
