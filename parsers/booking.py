@@ -412,7 +412,7 @@ class BookingExcelParser(OTAParser):
     Rows are grouped by payout_id to form payout batches.
     """
 
-    SUPPORTED_TYPES = {"Reservation", "Commission adjustment"}
+    SUPPORTED_TYPES = {"Reservation", "Commission adjustment", "Réservation", "Ajustement de la commission"}
 
     def parse_file(self, path: Path) -> Tuple[List[Reservation], List[Anomaly]]:
         batches, anomalies = self.parse_into_batches(path)
@@ -555,7 +555,7 @@ class BookingExcelParser(OTAParser):
         city_tax       = _cell_to_decimal(row[11]) or Decimal("0")
         net_raw        = _cell_to_decimal(row[13])
 
-        if row_type == "Commission adjustment":
+        if row_type in ("Commission adjustment", "Ajustement de la commission"):
             net            = net_raw or Decimal("0")
             amount         = net
             commission     = Decimal("0")
