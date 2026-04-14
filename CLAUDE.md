@@ -127,6 +127,14 @@ Toujours commiter/pusher le mapping avant de déployer.
 
 ## Changelog
 
+### 2026-04-14 — Fixes parsing Booking + Airbnb (Google Sheets)
+- Booking : support types français (`Réservation`, `Ajustement de la commission`, `customer_complaint`)
+- Booking : parsing dates françaises (`9 avr. 2026`) + dates Excel datetime objects
+- Airbnb : parser robuste aux colonnes variables via `col_map` par nom (extra colonne null détectée en col 3)
+- Airbnb : parsing dates string DD/MM/YYYY + montants format français (virgule décimale)
+- `folder_id` Drive hardcodé dans `config/settings.py` — plus besoin de le passer dans le body
+- `customer_complaint` traité comme ajustement : net = montant déduit, commission = 0
+
 ### 2026-04-13 — Libellés frais Booking par réservation
 - Débit `401BOOKING` éclaté en une ligne par réservation : `{code_comptable} - {ref_num} - FEE BOOKING - {date}`
 - Nécessaire pour lettrage avec les factures de commission Booking (demande expert comptable)
