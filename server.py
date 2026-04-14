@@ -277,7 +277,12 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
                 )
 
         if not batches:
-            return {"status": "skipped", "reason": "No payout batches found in the Airbnb file."}
+            return {
+                "status": "skipped",
+                "reason": "No payout batches found in the Airbnb file.",
+                "anomalies_count": len(anomalies),
+                "anomalies_sample": [{"type": a.type, "severity": a.severity, "message": a.message} for a in anomalies[:5]],
+            }
 
         # Step 4: generate entries per batch (keep per-batch for PennyLane posting)
         per_batch_entries = []
