@@ -7,6 +7,12 @@ from typing import Dict
 
 logger = logging.getLogger(__name__)
 
+import re
+
+def _normalize_key(name: str) -> str:
+    """Normalize whitespace around hyphens so 'A -B' == 'A - B' == 'A- B'."""
+    return re.sub(r'\s*-\s*', ' - ', name.strip())
+
 
 def load_mapping(path: Path) -> Dict[str, str]:
     """
@@ -123,7 +129,7 @@ def load_airbnb_mapping(path: Path) -> Dict[str, str]:
         if not logement or not code_comptable:
             continue
 
-        mapping[logement] = code_comptable
+        mapping[_normalize_key(logement)] = code_comptable
 
     logger.info("Loaded %d Airbnb mapping entries from %s", len(mapping), path)
     return mapping

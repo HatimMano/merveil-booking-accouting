@@ -6,6 +6,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
+from config.mapping_loader import _normalize_key
+
 from config.settings import (
     ACCOUNT_BANK,
     ACCOUNT_CLIENT,
@@ -106,7 +108,7 @@ def generate_entries(
 
     # --- Step 1: resolve mapping for every reservation ---
     for r in reservations:
-        code_comptable = mapping.get(r.ref_appart)
+        code_comptable = mapping.get(r.ref_appart) or mapping.get(_normalize_key(r.ref_appart))
         if code_comptable is None:
             anomalies.append(Anomaly(
                 type=AnomalyType.MAPPING_NOT_FOUND,
