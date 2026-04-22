@@ -169,7 +169,7 @@ def generate_entries(
                 date=processing_date,
                 ref_piece="",
                 account=account_supplier,
-                label=f"{r.code_comptable} - {r.reference_number} - FEE {ota_label} - {payout_label}",
+                label=f"{r.code_comptable} - {r.ref_appart} - FEE {ota_label} - {payout_label}",
                 debit=fee if fee >= 0 else None,
                 credit=None if fee >= 0 else -fee,
             ))
