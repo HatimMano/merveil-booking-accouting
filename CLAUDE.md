@@ -19,10 +19,20 @@ Triggered via HTTP POST by Cloud Scheduler (or manually).
   "folder_id": "1abc...xyz",
   "ota": "booking",          // "booking" or "airbnb"
   "date": "2026-03-27",      // or "AUTO" for today (Paris timezone)
-  "dry_run": true,           // optional — validate without posting or archiving
-  "test": true               // optional — post with [TEST] prefix, no archiving
+  "dry_run": true,           // optional — validate, no PennyLane post, no BQ write, no archiving
+  "test": true,              // optional — post with [TEST] prefix
+  "bq_only": true,           // optional — skip PennyLane, write trace to BQ only (validation mode)
+  "run_id": "uuid"           // optional — auto-generated UUID per run if absent
 }
 ```
+
+### Operating modes
+| Mode | PennyLane | BQ trace | Archive Drive |
+|---|---|---|---|
+| Normal | POST | INSERT (bq_only=false) | Yes |
+| `dry_run=true` | skip | skip | skip |
+| `bq_only=true` | **skip** | INSERT (bq_only=true, ledger ids NULL) | Yes (suffixe `[BQ-ONLY]`) |
+| `test=true` | POST avec `[TEST]` préfixe | INSERT (test_mode=true) | Yes |
 
 ## Entrypoints
 | File | Role |
@@ -31,7 +41,8 @@ Triggered via HTTP POST by Cloud Scheduler (or manually).
 | `parsers/booking.py` | `BookingExcelParser` — parses weekly Booking Excel into `BookingPayoutBatch` objects |
 | `parsers/airbnb.py` | `AirbnbParser` — parses monthly Airbnb Excel into payout batches |
 | `accounting/entries.py` | `generate_entries()` — builds PennyLane accounting lines from reservations |
-| `pennylane/client.py` | `PennyLaneClient` — posts batches to PennyLane API |
+| `pennylane/client.py` | `PennyLaneClient` — posts batches to PennyLane API, returns `ledger_entry_line_id` per line |
+| `bigquery/postings.py` | `write_postings()` — append-only trace de chaque ligne postée vers `pennylane.raw_postings` (chantier 1 rapprochement) |
 | `drive/client.py` | `DriveClient` — downloads xlsx, creates folders, moves files, creates Sheets |
 | `config/settings.py` | Account codes, journal IDs, thresholds |
 | `config/mapping_loader.py` | `load_mapping()` (Booking), `load_airbnb_mapping()` (Airbnb) |
@@ -123,9 +134,52 @@ Toujours commiter/pusher le mapping avant de déployer.
 - `gcloud run services update-traffic` does NOT deploy a new image — always use `update --image`
 - Le mapping `CodeAppart_Compta.csv` doit être mis à jour et redéployé si un nouvel appartement Booking apparaît (`MAPPING_NOT_FOUND` = anomalie bloquante)
 
+## BQ trace — `pennylane.raw_postings` (chantier 1 rapprochement, 2026-05-06)
+Table append-only qui capture chaque ligne d'écriture générée par le pipeline (= 1 ledger_entry_line PennyLane par row). Pivot pour le rapprochement futur avec `mews_raw.raw_bills`.
+
+**Schéma** : `posted_at, run_id, ota, journal_code, processing_date, payout_date, source_file, batch_index, entry_index, ledger_entry_id, ledger_entry_line_id, account_code, ledger_account_id, label, debit, credit, ota_reservation_ref, ref_appart, code_comptable, ref_piece, bill_id_mews, test_mode, bq_only, service_version`. Partitionné `DATE(posted_at)`, clusterisé `ota, run_id`.
+
+**SA** : `booking-pipeline-sa@merveil-data-warehouse.iam.gserviceaccount.com` a le rôle `WRITER` (= `bigquery.dataEditor`) sur le dataset `pennylane`. Streaming inserts via `insert_rows_json` (pas besoin de `jobUser`).
+
+**Modes** :
+- Run normal → `ledger_entry_id`/`ledger_entry_line_id` remplis avec les vrais IDs PennyLane (récupérés depuis la réponse API par alignement positionnel `entries[i] ↔ result.ledger_entry_lines[i]`)
+- `bq_only=true` → POST PennyLane skippé, BQ écrit avec `ledger_entry_id=NULL` et `ledger_entry_line_id=NULL`. Mode validation pour itérer sur le schéma sans risque comptable
+- BQ insert wrapped en `try/except` non-fatal (si BQ tombe après un POST PennyLane réussi, le pipeline ne re-pousse pas — log warning et continue)
+
+**Champs vides aujourd'hui (chantier 2)** : `ref_piece` et `bill_id_mews` restent NULL — seront remplis quand on aura le lookup OTA-ref → Mews bill.
+
+**Champs NULL pour les lignes header** (`account_code='51105000'` bank, `account_code='401BOOKING'/'401AIRBNB'` supplier) : `ota_reservation_ref`, `ref_appart`, `code_comptable`, `payout_date` (les headers agrègent toutes les résas du payout — pas de réf unique).
+
+## BQ coverage — Booking.com & Airbnb (vérifié 2026-04-16)
+Pour les réservations non annulées (3 derniers mois), couverture dans `marts.fct_reservations` :
+| Champ | Booking.com | Airbnb |
+|---|---|---|
+| `channel_number` (ref OTA) | 100% | 100% |
+| `customer_name` | 99.9% | 99.1% |
+| `apartment_name` | 100%* | 100%* |
+
+*`P09-CAR7-0G` manquait dans `sheets_raw.appartements_snapshot` (`Nom_Appartement` null) → corrigé manuellement le 2026-04-16 via UPDATE BQ. Sera pris en compte au prochain run dbt.
+
+**Conséquence** : pour Booking.com et Airbnb, le rapport de comptabilité suffit comme source financière. BQ enrichit avec le nom client via JOIN sur `channel_number`. Aucun export Mews supplémentaire nécessaire pour ces deux OTAs.
+
+### Refresh `appartements_snapshot`
+Table native (pas d'auto-sync). Quand le DWH Feed Google Sheets est modifié :
+- Option rapide : `UPDATE sheets_raw.appartements_snapshot SET Nom_Appartement = '...' WHERE Code_Appartement = '...'`
+- Refresh complet (depuis BQ Console uniquement — MCP n'a pas les credentials Drive) :
+  ```sql
+  TRUNCATE TABLE `merveil-data-warehouse.sheets_raw.appartements_snapshot`;
+  INSERT INTO `merveil-data-warehouse.sheets_raw.appartements_snapshot`
+  SELECT * FROM `merveil-data-warehouse.sheets_raw.appartements`;
+  ```
+
 ---
 
 ## Changelog
+
+### 2026-04-16 — Couverture BQ vérifiée + fix appartements_snapshot
+- Vérifié couverture `fct_reservations` pour Booking.com et Airbnb : `channel_number` 100%, `apartment_name` ~100%, `customer_name` ~99%
+- `P09-CAR7-0G` manquait dans `sheets_raw.appartements_snapshot` → UPDATE manuel `Nom_Appartement = 'Merveil - Family Suite - Opera - Cardinal Mercier'`
+- Confirmé : aucun export Mews supplémentaire nécessaire pour Booking.com et Airbnb — rapport de comptabilité + BQ suffisent
 
 ### 2026-04-14 — Fixes parsing Booking + Airbnb (Google Sheets)
 - Booking : support types français (`Réservation`, `Ajustement de la commission`, `customer_complaint`)

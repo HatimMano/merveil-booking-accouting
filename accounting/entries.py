@@ -40,11 +40,18 @@ class AccountingEntry:
 
     journal: str          # e.g. "BOOK"
     date: date            # Python date object (stored natively in Excel)
-    ref_piece: str        # usually empty for Booking.com entries
+    ref_piece: str        # usually empty — receives Mews bill Number in chantier 2
     account: str          # e.g. "411BOOKING", "401BOOKING", "51105000"
     label: str
     debit: Optional[Decimal]   # None → empty cell
     credit: Optional[Decimal]  # None → empty cell
+
+    # Trace metadata for BQ writer (NULL pour les lignes header bank/supplier).
+    ota_reservation_ref: Optional[str] = None
+    ref_appart: Optional[str] = None
+    code_comptable: Optional[str] = None
+    payout_date: Optional[date] = None
+    bill_id_mews: Optional[str] = None  # rempli au chantier 2
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +179,10 @@ def generate_entries(
                 label=f"{r.code_comptable} - {r.ref_appart} - FEE {ota_label} - {payout_label}",
                 debit=fee if fee >= 0 else None,
                 credit=None if fee >= 0 else -fee,
+                ota_reservation_ref=r.reference_number,
+                ref_appart=r.ref_appart,
+                code_comptable=r.code_comptable,
+                payout_date=r.payout_date,
             ))
     else:
         entries.append(AccountingEntry(
@@ -207,6 +218,10 @@ def generate_entries(
                 label=f"{r.code_comptable} - {ota_label} - Frais d'annulation - {r.guest_name} - {r.reference_number}",
                 debit=-gross_excl_city_tax if gross_excl_city_tax < 0 else gross_excl_city_tax,
                 credit=None,
+                ota_reservation_ref=r.reference_number,
+                ref_appart=r.ref_appart,
+                code_comptable=r.code_comptable,
+                payout_date=r.payout_date,
             ))
         else:
             entries.append(AccountingEntry(
@@ -217,6 +232,10 @@ def generate_entries(
                 label=f"{r.code_comptable}- {ota_label} - {r.guest_name} - CO :{checkout_label}",
                 debit=None if gross_excl_city_tax >= 0 else -gross_excl_city_tax,
                 credit=gross_excl_city_tax if gross_excl_city_tax >= 0 else None,
+                ota_reservation_ref=r.reference_number,
+                ref_appart=r.ref_appart,
+                code_comptable=r.code_comptable,
+                payout_date=r.payout_date,
             ))
 
     logger.info(

@@ -27,6 +27,7 @@ import logging
 import os
 import sys
 import tempfile
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -49,6 +50,7 @@ from parsers.airbnb import AirbnbParser
 from accounting.entries import generate_entries
 from drive.client import DriveClient
 from pennylane.client import PennyLaneClient
+from bigquery.postings import write_postings, build_synthetic_results
 from validators.anomalies import (
     Severity,
     check_balance,
@@ -88,7 +90,9 @@ def process():
     ota       = body.get("ota", "booking")
     test_mode = bool(body.get("test", False))
     dry_run   = bool(body.get("dry_run", False))
+    bq_only   = bool(body.get("bq_only", False))
     date_str  = body.get("date")
+    run_id    = body.get("run_id") or str(uuid.uuid4())
 
     if ota not in ("booking", "airbnb"):
         return jsonify({"error": f"Unsupported OTA '{ota}'. Use 'booking' or 'airbnb'."}), 400
@@ -105,17 +109,21 @@ def process():
     except ValueError:
         return jsonify({"error": f"Invalid date format '{date_str}'. Expected YYYY-MM-DD"}), 400
 
-    logger.info("Processing request: folder_id=%s  date=%s  ota=%s", folder_id, date_str, ota)
+    logger.info(
+        "Processing request: run_id=%s folder_id=%s date=%s ota=%s bq_only=%s test_mode=%s dry_run=%s",
+        run_id, folder_id, date_str, ota, bq_only, test_mode, dry_run,
+    )
 
     try:
         if ota == "booking":
-            result = _run_booking_pipeline(folder_id, processing_date, date_str, test_mode, dry_run)
+            result = _run_booking_pipeline(folder_id, processing_date, date_str, test_mode, dry_run, bq_only, run_id)
         else:
-            result = _run_airbnb_pipeline(folder_id, processing_date, date_str, test_mode, dry_run)
+            result = _run_airbnb_pipeline(folder_id, processing_date, date_str, test_mode, dry_run, bq_only, run_id)
     except Exception as exc:
         logger.exception("Pipeline failed: %s", exc)
-        return jsonify({"error": str(exc)}), 500
+        return jsonify({"error": str(exc), "run_id": run_id}), 500
 
+    result["run_id"] = run_id
     return jsonify(result), 200
 
 
@@ -123,7 +131,7 @@ def process():
 # Booking pipeline
 # ---------------------------------------------------------------------------
 
-def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False, dry_run: bool = False) -> dict:
+def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False, dry_run: bool = False, bq_only: bool = False, run_id: str = "") -> dict:
     drive = DriveClient()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -195,7 +203,7 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
                 "blocking_details": [a.message for a in blocking],
             }
 
-        # Step 7: post each payout batch to PennyLane (skipped in dry_run)
+        # Step 7: post each payout batch to PennyLane (skipped in dry_run / bq_only)
         if dry_run:
             total_entries = sum(len(b) for b in per_batch_entries)
             logger.info("dry_run=True — PennyLane NOT posted. %d batches / %d entries ready.", len(per_batch_entries), total_entries)
@@ -212,12 +220,34 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
             for batch in per_batch_entries:
                 if batch:
                     batch[0].label = "[TEST] " + batch[0].label
-        pl_results = _get_pennylane_client().post_batches(per_batch_entries)
-        logger.info(
-            "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
-            len(all_processed), len(warnings), balance_ok, len(pl_results),
-        )
+
+        if bq_only:
+            pl_results = build_synthetic_results(per_batch_entries)
+            logger.info("bq_only=True — PennyLane skipped, writing trace to BQ only.")
+        else:
+            pl_results = _get_pennylane_client().post_batches(per_batch_entries)
+            logger.info(
+                "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
+                len(all_processed), len(warnings), balance_ok, len(pl_results),
+            )
+
+        bq_rows_written = 0
+        try:
+            bq_rows_written = write_postings(
+                run_id=run_id,
+                ota="booking",
+                source_file=xlsx_meta["name"],
+                per_batch_entries=per_batch_entries,
+                pl_results=pl_results,
+                test_mode=test_mode,
+                bq_only=bq_only,
+            )
+        except Exception as exc:
+            logger.exception("BQ trace write failed (non-fatal): %s", exc)
+
         file_date = max(b.payout_date for b in batches).strftime("%Y-%m-%d")
+        if bq_only:
+            file_date = f"{file_date} [BQ-ONLY]"
         _archive_run(drive, folder_id, file_date, [xlsx_file_id], warnings, "booking")
         return {
             "status":                   "ok",
@@ -225,7 +255,9 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
             "warnings":                 len(warnings),
             "blocking":                 0,
             "balance_ok":               balance_ok,
-            "pennylane_batches_posted": len(pl_results),
+            "pennylane_batches_posted": 0 if bq_only else len(pl_results),
+            "bq_rows_written":          bq_rows_written,
+            "bq_only":                  bq_only,
         }
 
 
@@ -233,7 +265,7 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
 # Airbnb pipeline
 # ---------------------------------------------------------------------------
 
-def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False, dry_run: bool = False) -> dict:
+def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False, dry_run: bool = False, bq_only: bool = False, run_id: str = "") -> dict:
     drive = DriveClient()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -324,7 +356,7 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
                 "blocking_details": [a.message for a in blocking],
             }
 
-        # Step 7: post each payout batch to PennyLane (skipped in dry_run)
+        # Step 7: post each payout batch to PennyLane (skipped in dry_run / bq_only)
         if dry_run:
             total_entries = sum(len(b) for b in per_batch_entries)
             logger.info("dry_run=True — PennyLane NOT posted. %d batches / %d entries ready.", len(per_batch_entries), total_entries)
@@ -341,19 +373,42 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
             for batch in per_batch_entries:
                 if batch:
                     batch[0].label = "[TEST] " + batch[0].label
-        pl_results = _get_pennylane_client().post_batches(per_batch_entries)
-        logger.info(
-            "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
-            len(all_processed), len(warnings), balance_ok, len(pl_results),
-        )
-        _archive_run(drive, folder_id, file_date, [xlsx_file_id], warnings, "airbnb")
+
+        if bq_only:
+            pl_results = build_synthetic_results(per_batch_entries)
+            logger.info("bq_only=True — PennyLane skipped, writing trace to BQ only.")
+        else:
+            pl_results = _get_pennylane_client().post_batches(per_batch_entries)
+            logger.info(
+                "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
+                len(all_processed), len(warnings), balance_ok, len(pl_results),
+            )
+
+        bq_rows_written = 0
+        try:
+            bq_rows_written = write_postings(
+                run_id=run_id,
+                ota="airbnb",
+                source_file=xlsx_meta["name"],
+                per_batch_entries=per_batch_entries,
+                pl_results=pl_results,
+                test_mode=test_mode,
+                bq_only=bq_only,
+            )
+        except Exception as exc:
+            logger.exception("BQ trace write failed (non-fatal): %s", exc)
+
+        archive_date = f"{file_date} [BQ-ONLY]" if bq_only else file_date
+        _archive_run(drive, folder_id, archive_date, [xlsx_file_id], warnings, "airbnb")
         return {
             "status":                   "ok",
             "reservations":             len(all_processed),
             "warnings":                 len(warnings),
             "blocking":                 0,
             "balance_ok":               balance_ok,
-            "pennylane_batches_posted": len(pl_results),
+            "pennylane_batches_posted": 0 if bq_only else len(pl_results),
+            "bq_rows_written":          bq_rows_written,
+            "bq_only":                  bq_only,
         }
 
 

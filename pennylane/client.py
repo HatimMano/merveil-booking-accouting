@@ -2,7 +2,7 @@
 
 import logging
 import time
-from typing import List
+from typing import List, Optional
 
 import requests
 
@@ -51,7 +51,13 @@ class PennyLaneClient:
         All entries must share the same journal code and processing date.
         The first entry's label is used as the overall ledger entry label.
 
-        Returns the API response dict, or a dry_run summary dict.
+        Returns a dict with:
+            ledger_entry_id     : PennyLane id (None on dry_run)
+            ledger_entry_lines  : list aligned with `entries`, each
+                                  {ledger_entry_line_id, ledger_account_id}
+            raw                 : raw API response (or dry_run summary)
+            dry_run             : bool
+
         Raises ValueError if a journal or account ID cannot be resolved.
         Raises requests.HTTPError on API errors.
         """
@@ -67,11 +73,13 @@ class PennyLaneClient:
             )
 
         entry_date = entries[0].date.strftime("%Y-%m-%d")
-        label = entries[0].label  # bank header line label
+        label = entries[0].label
 
         lines = []
+        account_ids: List[int] = []
         for e in entries:
             account_id = self._resolve_account_id(e.account, journal_code)
+            account_ids.append(account_id)
             lines.append({
                 "debit":             f"{e.debit:.2f}"  if e.debit  is not None else "0.00",
                 "credit":            f"{e.credit:.2f}" if e.credit is not None else "0.00",
@@ -97,21 +105,48 @@ class PennyLaneClient:
                 abs(total_debit - total_credit) < 0.01,
             )
             return {
-                "dry_run":  True,
-                "journal":  journal_code,
-                "date":     entry_date,
-                "lines":    len(lines),
-                "balanced": abs(total_debit - total_credit) < 0.01,
+                "dry_run":             True,
+                "ledger_entry_id":     None,
+                "ledger_entry_lines":  [
+                    {"ledger_entry_line_id": None, "ledger_account_id": aid}
+                    for aid in account_ids
+                ],
+                "raw": {
+                    "journal":  journal_code,
+                    "date":     entry_date,
+                    "lines":    len(lines),
+                    "balanced": abs(total_debit - total_credit) < 0.01,
+                },
             }
 
         response = self._session.post(f"{_BASE_URL}/ledger_entries", json=payload)
         response.raise_for_status()
-        result = response.json()
+        raw = response.json()
+
+        api_lines = raw.get("ledger_entry_lines", [])
+        if len(api_lines) != len(entries):
+            logger.warning(
+                "PennyLane returned %d lines but we sent %d — line id mapping may be off.",
+                len(api_lines), len(entries),
+            )
+        line_results = []
+        for i, _e in enumerate(entries):
+            api_line = api_lines[i] if i < len(api_lines) else {}
+            line_results.append({
+                "ledger_entry_line_id": api_line.get("id"),
+                "ledger_account_id":    api_line.get("ledger_account_id", account_ids[i]),
+            })
+
         logger.info(
             "Posted ledger entry id=%s journal=%s date=%s lines=%d",
-            result.get("id"), journal_code, entry_date, len(lines),
+            raw.get("id"), journal_code, entry_date, len(lines),
         )
-        return result
+        return {
+            "dry_run":             False,
+            "ledger_entry_id":     raw.get("id"),
+            "ledger_entry_lines":  line_results,
+            "raw":                 raw,
+        }
 
     def post_batches(
         self,
