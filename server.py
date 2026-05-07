@@ -168,11 +168,15 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
         if not batches:
             return {"status": "skipped", "reason": "No payout batches found in the Booking file."}
 
-        # Step 3.5: BQ lookup ota_ref → Mews bill (chantier 2 du rapprochement).
-        # Best-effort : un échec ici laisse ref_piece vide, ne casse pas le pipeline.
-        all_ota_refs = [r.reference_number for b in batches for r in b.reservations]
+        # Step 3.5: BQ lookup (ota_ref, gross) → Mews bill (chantier 2).
+        # Le gross sert au matching par proximite (= evite les bills annexes).
+        # gross_excl_city_tax = ce qui sera credit sur le 411 cote PennyLane.
+        all_targets = [
+            (r.reference_number, float(r.amount + r.city_tax))  # city_tax negatif
+            for b in batches for r in b.reservations
+        ]
         try:
-            bill_lookup = lookup_bills(all_ota_refs)
+            bill_lookup = lookup_bills(all_targets)
         except Exception as exc:
             logger.warning("Bill lookup failed (non-fatal): %s", exc)
             bill_lookup = {}
@@ -324,10 +328,13 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
         if not batches:
             return {"status": "skipped", "reason": "No payout batches found in the Airbnb file."}
 
-        # Step 3.5: BQ lookup ota_ref → Mews bill (chantier 2 du rapprochement).
-        all_ota_refs = [r.reference_number for b in batches for r in b.reservations]
+        # Step 3.5: BQ lookup (ota_ref, gross) → Mews bill (chantier 2).
+        all_targets = [
+            (r.reference_number, float(r.amount + r.city_tax))
+            for b in batches for r in b.reservations
+        ]
         try:
-            bill_lookup = lookup_bills(all_ota_refs)
+            bill_lookup = lookup_bills(all_targets)
         except Exception as exc:
             logger.warning("Bill lookup failed (non-fatal): %s", exc)
             bill_lookup = {}

@@ -1,15 +1,19 @@
-"""Lookup BQ : OTA reservation ref -> Mews bill (id + Number).
+"""Lookup BQ : OTA reservation ref -> Mews bill (id + Number) avec matching
+par proximite de montant.
 
 Chantier 2 du rapprochement Mews x PennyLane. Depuis le ChannelNumber OTA
 (BookingID, AirbnbCode, ...) stocke dans stg_mews__reservations, on remonte
-au bill Mews et son Number officiel pour enrichir les ecritures PennyLane
-(`ref_piece`).
+au bill Mews dont le total absolu est le plus proche du `gross` payout
+recu de l'OTA. Cette heuristique est plus robuste que "Closed prioritaire"
+qui choisissait parfois un bill annexe (REBATE, taxe) au lieu du bill
+principal (chambre).
 
 Pivot : ChannelNumber == ota_reservation_ref (cote booking-pipeline).
+Le caller passe (ota_ref, gross_amount) — le gross sert au matching.
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 
 from google.cloud import bigquery
 
@@ -17,80 +21,108 @@ logger = logging.getLogger(__name__)
 
 _PROJECT = "merveil-data-warehouse"
 
-# Une seule requete batch : on passe la liste complete des refs OTA et on
-# recupere d'un coup les bills associes. Plus efficace que N requetes.
+# Lookup batch : pour chaque (ota_ref, gross), trouver le bill dont le total
+# absolu est le plus proche du gross. Tie-breakers (par ordre) :
+#   1. distance abs(bill_total - gross) la plus petite
+#   2. accounting_state='Closed' prioritaire (= bill comptablement clos)
+#   3. consumed_at le plus recent
 #
-# Strategie de matching quand 1 resa a plusieurs bills (cas rare = corrections
-# Mews) : on privilegie le bill Closed le plus recent, qui est le bill
-# comptablement "vivant" (= equivalent is_latest_in_chain dans int_compta__bills_net).
-#
-# is_correction est ignore volontairement : si le seul bill disponible est une
-# correction (= bill original non encore importe parce que pre-backfill), c'est
-# quand meme la meilleure reference qu'on a.
+# Filtre `having abs(sum) >= 1` : on ignore les bills "vides" (items qui se
+# compensent a 0) pour eviter les faux match avec des petits postings.
 _LOOKUP_QUERY = """
-WITH res_map AS (
-    SELECT
-        r.channel_number AS ota_ref,
-        r.reservation_id
-    FROM `{project}.staging.stg_mews__reservations` r
-    WHERE r.channel_number IN UNNEST(@ota_refs)
+WITH targets AS (
+    SELECT ota_ref, gross
+    FROM UNNEST(@targets) AS t
 ),
-bill_per_resa AS (
+res_map AS (
+    SELECT r.channel_number AS ota_ref, r.reservation_id
+    FROM `{project}.staging.stg_mews__reservations` r
+    WHERE r.channel_number IN (SELECT ota_ref FROM targets)
+),
+bill_totals AS (
     SELECT
         rm.ota_ref,
         oi.bill_id,
-        ROW_NUMBER() OVER (
-            PARTITION BY rm.ota_ref
-            ORDER BY
-                CASE WHEN oi.accounting_state = 'Closed' THEN 0 ELSE 1 END,
-                MAX(oi.consumed_at) DESC
-        ) AS rn
+        ABS(SUM(oi.amount_gross)) AS bill_ttc_abs,
+        MAX(CASE WHEN oi.accounting_state = 'Closed' THEN 1 ELSE 0 END) AS has_closed_items,
+        MAX(oi.consumed_at) AS last_consumed
     FROM res_map rm
     INNER JOIN `{project}.staging.stg_mews__order_items` oi
         ON oi.reservation_id = rm.reservation_id
-    WHERE oi.bill_id IS NOT NULL
-    GROUP BY rm.ota_ref, oi.bill_id, oi.accounting_state
+    WHERE oi.bill_id IS NOT NULL AND NOT oi.is_canceled
+    GROUP BY rm.ota_ref, oi.bill_id
+    HAVING ABS(SUM(oi.amount_gross)) >= 1
+),
+bill_ranked AS (
+    SELECT
+        t.ota_ref,
+        bt.bill_id,
+        ROW_NUMBER() OVER (
+            PARTITION BY t.ota_ref
+            ORDER BY
+                ABS(bt.bill_ttc_abs - t.gross) ASC,
+                bt.has_closed_items DESC,
+                bt.last_consumed DESC
+        ) AS rn
+    FROM targets t
+    INNER JOIN bill_totals bt ON bt.ota_ref = t.ota_ref
 )
 SELECT
-    bpr.ota_ref,
-    bpr.bill_id,
+    br.ota_ref,
+    br.bill_id,
     b.bill_number
-FROM bill_per_resa bpr
-LEFT JOIN `{project}.staging.stg_mews__bills` b
-    ON b.bill_id = bpr.bill_id
-WHERE bpr.rn = 1
+FROM bill_ranked br
+LEFT JOIN `{project}.staging.stg_mews__bills` b ON b.bill_id = br.bill_id
+WHERE br.rn = 1
 """.format(project=_PROJECT)
 
 
-def lookup_bills(ota_refs: List[str]) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
+def lookup_bills(
+    targets: Iterable[Tuple[str, float]],
+) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
     """
-    Retourne un dict {ota_ref: (bill_id, bill_number)} pour chaque ref OTA en entree.
-
-    Si une ref OTA n'a pas de bill matche (resa Mews introuvable, pas d'item lie,
-    bill pas encore importe...), elle n'apparait PAS dans le dict retourne. Le
-    caller est libre d'en deduire que ref_piece doit rester vide.
-
-    Si bill_number est NULL cote BQ (cas tres rare : bill exists in
-    raw_order_items.bill_id mais pas dans raw_bills), le tuple sera
-    (bill_id, None) et on remplira bill_id_mews mais pas ref_piece.
+    Resout chaque (ota_ref, gross_amount) vers le meilleur bill Mews matchant.
 
     Args:
-        ota_refs: Liste de references OTA (BookingID, AirbnbCode, ...). Peut
-                  contenir des doublons et None — gere proprement.
+        targets: Iterable de (ota_reference_OTA, montant_TTC_attendu).
+                 Le gross sert au matching par proximite. Doublons et None
+                 dans ota_ref geres proprement.
 
     Returns:
-        Dict ota_ref -> (bill_id, bill_number). Vide si pas de matching.
+        Dict ota_ref -> (bill_id, bill_number). Si bill_number est NULL,
+        c'est que le bill existe cote items mais pas dans stg_mews__bills
+        (ex: bill Open pre-polling UpdatedUtc).
+        Refs sans aucun match n'apparaissent pas dans le dict.
     """
-    refs = sorted({r for r in ota_refs if r})
-    if not refs:
+    # Deduplique par (ota_ref, gross) — un meme ota_ref peut avoir plusieurs
+    # postings (rare mais possible) avec des gross differents.
+    seen: Dict[Tuple[str, float], None] = {}
+    for ota_ref, gross in targets:
+        if ota_ref and gross is not None:
+            seen[(ota_ref, float(gross))] = None
+    if not seen:
         return {}
 
-    logger.info("Bill lookup: %d ota_refs distinct", len(refs))
+    logger.info("Bill lookup: %d targets (ota_ref, gross) distincts", len(seen))
 
     client = bigquery.Client(project=_PROJECT)
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
-            bigquery.ArrayQueryParameter("ota_refs", "STRING", refs),
+            bigquery.ArrayQueryParameter(
+                "targets",
+                bigquery.StructQueryParameterType(
+                    bigquery.ScalarQueryParameterType("ota_ref", "STRING"),
+                    bigquery.ScalarQueryParameterType("gross", "FLOAT64"),
+                ),
+                [
+                    bigquery.StructQueryParameter(
+                        None,
+                        bigquery.ScalarQueryParameter("ota_ref", "STRING", ota_ref),
+                        bigquery.ScalarQueryParameter("gross", "FLOAT64", gross),
+                    )
+                    for (ota_ref, gross) in seen
+                ],
+            ),
         ]
     )
     rows = client.query(_LOOKUP_QUERY, job_config=job_config).result()
@@ -101,7 +133,7 @@ def lookup_bills(ota_refs: List[str]) -> Dict[str, Tuple[Optional[str], Optional
 
     matched = sum(1 for _, num in out.values() if num is not None)
     logger.info(
-        "Bill lookup: %d/%d refs matched with a bill_number (%d with bill_id only)",
-        matched, len(refs), len(out) - matched,
+        "Bill lookup: %d/%d refs matched (%d avec bill_number, %d sans)",
+        len(out), len(set(k[0] for k in seen)), matched, len(out) - matched,
     )
     return out
