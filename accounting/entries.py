@@ -79,6 +79,7 @@ def generate_entries(
     account_cancellation_fee: Optional[str] = None,
     ota_label: str = "BOOKING",
     per_reservation_fees: bool = False,
+    bill_lookup: Optional[Dict[str, Tuple[Optional[str], Optional[str]]]] = None,
 ) -> Tuple[List[AccountingEntry], List[Reservation], List[Anomaly]]:
     """
     Generate PennyLane accounting entries for a batch of reservations.
@@ -171,10 +172,11 @@ def generate_entries(
             fee = -r.commission - r.payment_charge
             if fee == Decimal("0"):
                 continue
+            bill_id_mews, bill_number = (bill_lookup or {}).get(r.reference_number, (None, None))
             entries.append(AccountingEntry(
                 journal=journal_code,
                 date=processing_date,
-                ref_piece="",
+                ref_piece=bill_number or "",
                 account=account_supplier,
                 label=f"{r.code_comptable} - {r.ref_appart} - FEE {ota_label} - {payout_label}",
                 debit=fee if fee >= 0 else None,
@@ -183,6 +185,7 @@ def generate_entries(
                 ref_appart=r.ref_appart,
                 code_comptable=r.code_comptable,
                 payout_date=r.payout_date,
+                bill_id_mews=bill_id_mews,
             ))
     else:
         entries.append(AccountingEntry(
@@ -208,12 +211,14 @@ def generate_entries(
             and r.reservation_status == "Frais d'annulation"
         )
 
+        bill_id_mews, bill_number = (bill_lookup or {}).get(r.reference_number, (None, None))
+
         if is_cancellation_fee:
             # Route directly to 604610 — no intermediate 411AIRBNB step
             entries.append(AccountingEntry(
                 journal=journal_code,
                 date=processing_date,
-                ref_piece="",
+                ref_piece=bill_number or "",
                 account=account_cancellation_fee,
                 label=f"{r.code_comptable} - {ota_label} - Frais d'annulation - {r.guest_name} - {r.reference_number}",
                 debit=-gross_excl_city_tax if gross_excl_city_tax < 0 else gross_excl_city_tax,
@@ -222,12 +227,13 @@ def generate_entries(
                 ref_appart=r.ref_appart,
                 code_comptable=r.code_comptable,
                 payout_date=r.payout_date,
+                bill_id_mews=bill_id_mews,
             ))
         else:
             entries.append(AccountingEntry(
                 journal=journal_code,
                 date=processing_date,
-                ref_piece="",
+                ref_piece=bill_number or "",
                 account=account_client,
                 label=f"{r.code_comptable}- {ota_label} - {r.guest_name} - CO :{checkout_label}",
                 debit=None if gross_excl_city_tax >= 0 else -gross_excl_city_tax,
@@ -236,6 +242,7 @@ def generate_entries(
                 ref_appart=r.ref_appart,
                 code_comptable=r.code_comptable,
                 payout_date=r.payout_date,
+                bill_id_mews=bill_id_mews,
             ))
 
     logger.info(

@@ -51,6 +51,7 @@ from accounting.entries import generate_entries
 from drive.client import DriveClient
 from pennylane.client import PennyLaneClient
 from bigquery.postings import write_postings, build_synthetic_results
+from lookups.mews import lookup_bills
 from validators.anomalies import (
     Severity,
     check_balance,
@@ -167,6 +168,15 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
         if not batches:
             return {"status": "skipped", "reason": "No payout batches found in the Booking file."}
 
+        # Step 3.5: BQ lookup ota_ref → Mews bill (chantier 2 du rapprochement).
+        # Best-effort : un échec ici laisse ref_piece vide, ne casse pas le pipeline.
+        all_ota_refs = [r.reference_number for b in batches for r in b.reservations]
+        try:
+            bill_lookup = lookup_bills(all_ota_refs)
+        except Exception as exc:
+            logger.warning("Bill lookup failed (non-fatal): %s", exc)
+            bill_lookup = {}
+
         # Step 4: generate entries per batch
         per_batch_entries = []
         all_processed = []
@@ -174,6 +184,7 @@ def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_m
             batch_entries, batch_processed, entry_anomalies = generate_entries(
                 batch.reservations, processing_date, mapping,
                 per_reservation_fees=True,
+                bill_lookup=bill_lookup,
             )
             anomalies.extend(entry_anomalies)
             per_batch_entries.append(batch_entries)
@@ -313,6 +324,14 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
         if not batches:
             return {"status": "skipped", "reason": "No payout batches found in the Airbnb file."}
 
+        # Step 3.5: BQ lookup ota_ref → Mews bill (chantier 2 du rapprochement).
+        all_ota_refs = [r.reference_number for b in batches for r in b.reservations]
+        try:
+            bill_lookup = lookup_bills(all_ota_refs)
+        except Exception as exc:
+            logger.warning("Bill lookup failed (non-fatal): %s", exc)
+            bill_lookup = {}
+
         # Step 4: generate entries per batch (keep per-batch for PennyLane posting)
         per_batch_entries = []
         all_processed = []
@@ -327,6 +346,7 @@ def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mo
                 account_supplier=AIRBNB_ACCOUNT_SUPPLIER,
                 account_cancellation_fee=AIRBNB_ACCOUNT_CANCELLATION_FEE,
                 ota_label="AIRBNB",
+                bill_lookup=bill_lookup,
             )
             anomalies.extend(entry_anomalies)
             per_batch_entries.append(batch_entries)

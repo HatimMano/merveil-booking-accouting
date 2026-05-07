@@ -43,6 +43,7 @@ Triggered via HTTP POST by Cloud Scheduler (or manually).
 | `accounting/entries.py` | `generate_entries()` — builds PennyLane accounting lines from reservations |
 | `pennylane/client.py` | `PennyLaneClient` — posts batches to PennyLane API, returns `ledger_entry_line_id` per line |
 | `bigquery/postings.py` | `write_postings()` — append-only trace de chaque ligne postée vers `pennylane.raw_postings` (chantier 1 rapprochement) |
+| `lookups/mews.py` | `lookup_bills()` — query BQ batch : ota_ref → (bill_id, bill_number) (chantier 2 rapprochement) |
 | `drive/client.py` | `DriveClient` — downloads xlsx, creates folders, moves files, creates Sheets |
 | `config/settings.py` | Account codes, journal IDs, thresholds |
 | `config/mapping_loader.py` | `load_mapping()` (Booking), `load_airbnb_mapping()` (Airbnb) |
@@ -146,7 +147,9 @@ Table append-only qui capture chaque ligne d'écriture générée par le pipelin
 - `bq_only=true` → POST PennyLane skippé, BQ écrit avec `ledger_entry_id=NULL` et `ledger_entry_line_id=NULL`. Mode validation pour itérer sur le schéma sans risque comptable
 - BQ insert wrapped en `try/except` non-fatal (si BQ tombe après un POST PennyLane réussi, le pipeline ne re-pousse pas — log warning et continue)
 
-**Champs vides aujourd'hui (chantier 2)** : `ref_piece` et `bill_id_mews` restent NULL — seront remplis quand on aura le lookup OTA-ref → Mews bill.
+**Champs `ref_piece` + `bill_id_mews` (chantier 2 — 2026-05-07)** : remplis automatiquement via `lookups/mews.py` qui interroge BQ batch (1 query par run) sur `staging.stg_mews__reservations` JOIN `stg_mews__order_items` JOIN `stg_mews__bills`. Couverture mesurée 96% (73/76 résas Booking matchent un `bill_number` Mews) — les 4% restants = résas annulées/modifiées côté Mews ou bills antérieurs au backfill 2026.
+
+**Permissions IAM** : SA `booking-pipeline-sa@` a `roles/bigquery.jobUser` au project-level + `dataViewer` sur le dataset `staging` (en plus du `WRITER` sur `pennylane`). Lookup en best-effort (try/except non-fatal) : si BQ tombe, le run continue avec `ref_piece` vide.
 
 **Champs NULL pour les lignes header** (`account_code='51105000'` bank, `account_code='401BOOKING'/'401AIRBNB'` supplier) : `ota_reservation_ref`, `ref_appart`, `code_comptable`, `payout_date` (les headers agrègent toutes les résas du payout — pas de réf unique).
 
