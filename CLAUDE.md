@@ -43,7 +43,7 @@ Triggered via HTTP POST by Cloud Scheduler (or manually).
 | `accounting/entries.py` | `generate_entries()` — builds PennyLane accounting lines from reservations |
 | `pennylane/client.py` | `PennyLaneClient` — posts batches to PennyLane API, returns `ledger_entry_line_id` per line |
 | `bigquery/postings.py` | `write_postings()` — append-only trace de chaque ligne postée vers `pennylane.raw_postings` (chantier 1 rapprochement) |
-| `lookups/mews.py` | `lookup_bills()` — query BQ batch : ota_ref → (bill_id, bill_number) (chantier 2 rapprochement) |
+| `lookups/mews.py` | `lookup_bills()` — query BQ batch : `(ota_ref, gross)` → (bill_id, bill_number) avec matching par proximité de montant (chantier 2 rapprochement) |
 | `drive/client.py` | `DriveClient` — downloads xlsx, creates folders, moves files, creates Sheets |
 | `config/settings.py` | Account codes, journal IDs, thresholds |
 | `config/mapping_loader.py` | `load_mapping()` (Booking), `load_airbnb_mapping()` (Airbnb) |
@@ -147,7 +147,9 @@ Table append-only qui capture chaque ligne d'écriture générée par le pipelin
 - `bq_only=true` → POST PennyLane skippé, BQ écrit avec `ledger_entry_id=NULL` et `ledger_entry_line_id=NULL`. Mode validation pour itérer sur le schéma sans risque comptable
 - BQ insert wrapped en `try/except` non-fatal (si BQ tombe après un POST PennyLane réussi, le pipeline ne re-pousse pas — log warning et continue)
 
-**Champs `ref_piece` + `bill_id_mews` (chantier 2 — 2026-05-07)** : remplis automatiquement via `lookups/mews.py` qui interroge BQ batch (1 query par run) sur `staging.stg_mews__reservations` JOIN `stg_mews__order_items` JOIN `stg_mews__bills`. Couverture mesurée 96% (73/76 résas Booking matchent un `bill_number` Mews) — les 4% restants = résas annulées/modifiées côté Mews ou bills antérieurs au backfill 2026.
+**Champs `ref_piece` + `bill_id_mews` (chantier 2 — 2026-05-07)** : remplis automatiquement via `lookups/mews.py`. Signature `(ota_ref, gross)` : le gross sert au matching par proximité de montant (= plus robuste que "Closed prioritaire" qui choisissait parfois un bill annexe REBATE au lieu du bill principal chambre, cas Rachel Ward 24618). Tie-breakers : Closed > consumed récent. Filtre `having abs(sum) >= 1` pour ignorer les bills techniques.
+
+**Self-healing complémentaire côté dbt** : `dash_finance_postings` fait un retro-lookup à chaque dbt run avec COALESCE (retro_dbt prioritaire sur pipeline). Si pipeline a fait un mauvais lookup au moment du POST → retro_dbt corrige. Validé sur 619 lignes 411 (10 runs Booking + Airbnb) : 64% match parfait, 4 vrais orphelins (résas Mews annulées).
 
 **Permissions IAM** : SA `booking-pipeline-sa@` a `roles/bigquery.jobUser` au project-level + `dataViewer` sur le dataset `staging` (en plus du `WRITER` sur `pennylane`). Lookup en best-effort (try/except non-fatal) : si BQ tombe, le run continue avec `ref_piece` vide.
 
