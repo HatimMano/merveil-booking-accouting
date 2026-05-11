@@ -119,12 +119,19 @@ Deux jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehous
 | `airbnb-pipeline-daily` | Tous les jours à 8h Paris | Airbnb |
 | `booking-pipeline-weekly` | Tous les lundis à 8h Paris | Booking |
 
-Les deux jobs sont **normalement en PAUSE** entre les runs mensuels/hebdomadaires. Workflow :
+Les deux jobs sont **en PAUSE permanent** (décision 2026-05-11). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt). Workflow manuel actuel :
 1. Déposer le fichier xlsx dans le bon dossier Drive
 2. `gcloud scheduler jobs resume <job> --location=europe-west1`
 3. `gcloud scheduler jobs run <job> --location=europe-west1`
 4. Vérifier les logs Cloud Run
 5. `gcloud scheduler jobs pause <job> --location=europe-west1`
+
+### Backlog — trigger event-based (à la place du scheduler)
+Remplacer les schedulers par un déclenchement sur l'**event Drive "nouveau fichier dans le dossier"** :
+- **Option A — Drive Push Notifications (`changes.watch`)** : webhook Drive → Cloud Function relai → POST `/process` sur Cloud Run avec le bon `ota` selon le `folder_id`. Inconvénient : abonnement à renouveler toutes les 24h (TTL max).
+- **Option B — Eventarc + Cloud Storage relai** : un Apps Script côté Drive copie le nouveau fichier sur un bucket GCS dédié → trigger Eventarc `google.cloud.storage.object.v1.finalized` → Cloud Run. Plus stable, mais ajoute un hop.
+- **Option C — Poll léger** : Cloud Scheduler 1×/h qui appelle un endpoint `/check` qui liste le dossier Drive, et lance le pipeline si nouveau xlsx détecté. Moins event-driven mais zero infra additionnelle.
+Recommandation initiale : Option A (le plus event-driven et stable côté GCP), avec fallback C si renouvellement TTL Drive devient un problème.
 
 Pour redéployer : `gcloud run deploy booking-pipeline --source . --region=europe-west1 --project=merveil-data-warehouse --quiet`
 Toujours commiter/pusher le mapping avant de déployer.
