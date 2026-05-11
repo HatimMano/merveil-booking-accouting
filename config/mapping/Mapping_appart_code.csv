@@ -2,139 +2,136 @@
 ;;;;;;;;;
 ;;;;;;;;;
 ;AIRBNB;Comptabilité;Comptabilité;Comptabilité;Comptabilité;Comptabilité;;Comptabilité;Comptabilité
-Code Appartement;Titre Airbnb Annonce;Code Comptable;Compte 411AIRBNB;Compte 411BOOKING;Compte 411VRBO;Compte 411PLUMGUIDE;Nom Appartement;Compte 411Wesbite;Compte 411MARRIOTT
-P08-MER21-0G;Cocoon Loft Champs-Elysees Best Location in Paris;MER21-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Champs Elysées - Mermoz;411Website;411MARRIOTT
-P01-STD97-1G;Luxury 3 Bedroom 2 Bathroom Loft - Louvre Museum;STD97-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Saint Denis I;411Website;411MARRIOTT
-P08-ROY15-5D;Luxury 2 Bedroom - Louvre & Champs Elysees;ROY15-5D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Champs Elysees - Royale I;411Website;411MARRIOTT
-P08-ROY15-6D;Luxury 2 Bedroom Duplex - Saint Honore View;ROY15-6D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil Luxury Suite Royale II - Saint Honore view;411Website;411MARRIOTT
-P02-ABO52-0D;Luxury 3 bedroom 2 bathroom with AC - Louvre;ABO52-0D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Aboukir I;411Website;411MARRIOTT
-P02-ABO52-1F;Luxury 2 Bedroom 2 Bathroom Louvre & Marais;ABO52-1F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Aboukir II;411Website;411MARRIOTT
-P02-ABO52-2G;Luxury 2 bedroom 2 bathroom - Louvre;ABO52-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Aboukir III;411Website;411MARRIOTT
-P02-ABO52-2D;Luxury 2 Bedroom 2 Bathroom - Louvre Museum;ABO52-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Aboukir IV;411Website;411MARRIOTT
-P01-RAM80-1G;Luxury 4 bedroom 2 bathroom Apartment - Louvre;RAM80-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Rambuteau;411Website;411MARRIOTT
-P02-ABO69-1D;Luxury 3 bedroom 2 bathroom Palace Apartment - AC;ABO69-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Aboukir V;411Website;411MARRIOTT
-P02-ABO69-2D;Luxury Royale 3 bedroom, 2 bathroom;ABO69-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Serviced Apartment - Aboukir VI;411Website;411MARRIOTT
-P03-ARC74-0G;Luxury 3 bedroom Apartment - Le Marais;ARC74-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Archives I;411Website;411MARRIOTT
-P07-LAB77-0D;Luxury 2 Bedroom apartment - Eiffel Tower;LAB77-0D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Tour Eiffel - Bourdonnais;411Website;411MARRIOTT
-P01-SEB23-3F;Luxury 2 bedroom apartment with Balcony - Louvre;SEB23-3F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre -Sebastopol I;411Website;411MARRIOTT
-P01-SEB23-3G;Luxury 2 bedroom 2,5 bathroom Louvre & Notre Dame;SEB23-3G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Sebastopol II;411Website;411MARRIOTT
-P01-VAL1B-1G;Luxury 6Bdr 5Bth in Heritage Building-Louvre view;VAL1B-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE; Merveil Signature Suite - Valois - Louvre view;411Website;411MARRIOTT
-P02-ETI16-2F;Luxury 3 Bdr 3 Bthr Apartment in Heritage Building;ETI16-2F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Louvre - Marcel I;411Website;411MARRIOTT
-P02-ETI16-2D;Luxury 2 bedroom 1 Bathroom Louvre & Notre Dame;ETI16-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Marcel II;411Website;411MARRIOTT
-P15-LAO4-0G;Luxury 2 Bedroom 2 Bathroom - Eiffel Tower;LAO4-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Tour Eiffel - Laos;411Website;411MARRIOTT
-P01-VIC18-2G;Luxury 5 bedroom 3 bathroom Louvre - Notre Dame;VIC18-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Louvre - Victoria;411Website;411MARRIOTT
-P08-PON48-1D;Luxury 4 bdr 2 bthr Apartment - Champs Elysees;PON48-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite -Champs Elysees- Ponthieu I;411Website;411MARRIOTT
-P08-PON48-1G;Luxury 2 bedroom Apartment - Champs Elysees;PON48-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite -Champs Elysees-Ponthieu II;411Website;411MARRIOTT
-P02-REA110-2F;Luxury 4 bedroom 2 bathroom Apartment - Louvre;REA110-2F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Reaumur I;411Website;411MARRIOTT
-P02-REA110-2G;Luxury 3 bedroom 2 bathroom apartment - Louvre;REA110-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Reaumur II;411Website;411MARRIOTT
-P03-CHA73-0D;Luxury 2 Bedroom - Le Marais;CHA73-0D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Charlot;411Website;411MARRIOTT
-P04-LOU18-0D;Luxury 3 bedrooms 2 Bathrooms - Ile saint-Louis;LOU18-0D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Notre-Dame - Saint Louis;411Website;411MARRIOTT
-P03-MAR181-1G;Luxury 3 bedroom and 3 bathroom -Louvre Marais;MAR181-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Saint Martin I;411Website;411MARRIOTT
-P03-MAR181-2G;Luxury 3 bedroom and 3 bathroom -Louvre Museum;MAR181-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Saint Martin II;411Website;411MARRIOTT
-P07-BAC116-1G;Luxury 2 Bedroom - Eiffel-Tower & Orsay Museum;BAC116-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Tour Eiffel - Bac I;411Website;411MARRIOTT
-P07-BAC116-1D;Luxury 2 Bedroom Eiffel-Tower with Terrace;BAC116-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Tour Eiffel - Bac II;411Website;411MARRIOTT
-P08-FLO13-1F;Luxury 3 bedroom & 2 bathroom;FLO13-1F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite -ChampsElysees- Florentin I;411Website;411MARRIOTT
-P08-FLO13-1G;Luxury 3 bedroom 2 bathroom apartment - Louvre;FLO13-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite -ChampsElysees-Florentin II;411Website;411MARRIOTT
-P02-VOL18-2G;Luxury 2 Bdr 1 Bthr - Louvre Museum & Opera;VOL18-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite -Opera - Volney I;411Website;411MARRIOTT
-P02-VOL18-2D;Luxury 2 Bdr & 2 Bthr - Louvre Museum & Opera;VOL18-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite -Opera - Volney II;411Website;411MARRIOTT
-P03-OUR12-1G;Luxury 2 bedroom - Marais & Louvre;OUR12-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Ours I;411Website;411MARRIOTT
-P03-OUR12-1D;Luxury 2 bedroom & 2 bathroom - Marais & Louvre;OUR12-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Ours II;411Website;411MARRIOTT
-P02-ABO108-2G;Luxury 4 bedrooms 3 Bathrooms - Louvre;ABO108-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Aboukir VII;411Website;411MARRIOTT
-P04-ANT10-1G;Luxury 4 bedrooms 2 bathrooms apartment Le Marais;ANT10-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Antoine I;411Website;411MARRIOTT
-P04-ANT10-2G;Luxury 3 bedrooms 2 bathrooms apartment Le Marais;ANT10-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Antoine II;411Website;411MARRIOTT
-P08-BOI41-2D;Luxury 5 Bedroom 3 Bathroom Louvre Champs Elysees;BOI41-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Champs Elysees - Boissy;411Website;411MARRIOTT
-P02-QUA24-4F;Luxury  5 Bedrooms -3 Bathrooms Apartment  - Opera;QUA24-4F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Opera - Septembre I;411Website;411MARRIOTT
-P02-QUA24-4D;Luxury 2 bedrooms with 2 Bathrooms - Opéra;QUA24-4D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Opera - Septembre II;411Website;411MARRIOTT
-P08-MON58-0F;;MON58-0F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;;411Website;411MARRIOTT
-P08-MON58-0G;Cosy 3 Bedroom 2 bathroom apartment Champs Elysees;MON58-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Champs Elysees - Monceau;411Website;411MARRIOTT
-P01-OPE18-4D;Luxury 4 Bdr 3 bthr Apartment  - Opera Louvre;OPE18-4D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Opera I;411Website;411MARRIOTT
-P01-OPE18-4G;Luxury 3 bdr 2 bthr Apartment  - Opera Louvre;OPE18-4G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Opera II;411Website;411MARRIOTT
-P01-MTM13-2G;Luxury 3 bedroom & 2 bathroom Suite- Marais Louvre;MTM13-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Marais - Montmartre;411Website;411MARRIOTT
-P02-SEN18-3D;Cosy 2 bedrooms apartment - Louvre Museum;SEN18-3D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Louvre - Sentier I;411Website;411MARRIOTT
-P01-JJR27-1F;Luxury 2 bedroom Apartment - Louvre Museum;JJR27-1F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Rousseau;411Website;411MARRIOTT
-;;;;411BOOKING;;;;;
-P02-CLE7-0D;Cosy 3 bedroom duplex apartment (stairs) - Louvre;CLE7-0D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Louvre - Clery;411Website;411MARRIOTT
-P03-SEB44-1D;Cosy 3 bedroom apartment 1 bthr - Louvre Museum;SEB44-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Marais - Sebastopol III;411Website;411MARRIOTT
-P16-GRA41-1G;Cosy 3 bedrooms Apartment - Champs Elysees;GRA41-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Champs Elysees - Armee;411Website;411MARRIOTT
-P10-POI8-1D;Luxury 2 Bedroom apartment - Louvre & Opera;POI8-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Poissonniere;411Website;411MARRIOTT
-P08-HAU152-0G;Luxury 2 bdr 1 bthr with bathtub - Champs-Elysees;HAU152-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite -Champs Elysees-Haussmann I;411Website;411MARRIOTT
-P08-HAU152-0D;Luxury 2 bedroom 1 bthr apartment - Champs-Elysees;HAU152-0D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil -Luxury Suite -Champs Elysees-Haussmann II;411Website;411MARRIOTT
-P02-ABO58-1D;Cosy 3 bedrooms apartment - Louvre & Marais;ABO58-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Louvre - Aboukir VIII;411Website;411MARRIOTT
-P02-SEN18-2G;Cozy 3 bedrooms apartment - Louvre & Opéra;SEN18-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Louvre - Sentier II;411Website;411MARRIOTT
-P08-MOL3-0G;Cosy 2 bedroom 1 bathroom- Parc Monceau;MOL3-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Champs Elysees - Mollien;411Website;411MARRIOTT
-P09-GOD9-2F;Luxury 6 Bedroom 3 Bathroom Louvre Champs Elysees;GOD9-2F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Champs Elysees - Mauroy I;411Website;411MARRIOTT
-P03-TBG77-1D;Cosy 3 bedrooms apartment - Le Marais;TBG77-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Marais - Turbigo I;411Website;411MARRIOTT
-P02-NDV14-1D;Cosy 5 bedrooms with patio - Louvre Museum;NDV14-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family suite - Louvre - Victoires;411Website;411MARRIOTT
-P02-ABO94-1D;Luxury 6 bedrooms 3 bathrooms apartment - Opera;ABO94-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Aboukir IX;411Website;411MARRIOTT
-P08-CAS6-1D;Luxury 2 Bedroom & 2 Bathroom - Marais;CAS6-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy apartment - Opera - Castellane;411Website;411MARRIOTT
-P08-TIL14-5G;Cosy 4 bedrooms with Balcony - Champs Elysees;TIL14-5G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Eiffel Tower terrace;411Website;411MARRIOTT
-P02-STD250-1D;Cosy 2 bedrooms apartment with bathrooms - Louvre;STD250-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Marais - Saint Denis II;411Website;411MARRIOTT
-P09-GOD24-0F;Cosy 3 bedrooms Townhouse Louvre & Champs-Elysees;GOD24-0F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Opera - Mauroy II;411Website;411MARRIOTT
-P09-ROU14-1G;Luxury 2 Bedroom & 2 Bathroom Apartment - Louvre;ROU14-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Opera - Rougemont I;411Website;411MARRIOTT
-P09-ROU14-1D;Luxury 3 Bedroom & 3,5 Bathroom Apartment - Louvre;ROU14-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Opera - Rougemont II;411Website;411MARRIOTT
-P01-ETI39-1F;Luxury 5 Bedroom 4 Bathroom - Louvre & Notre Dame;ETI39-1F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Marcel III;411Website;411MARRIOTT
-P03-MAR359-1F;Cosy 3 Bedrooms Apartment - 2 Bathrooms - Marais;MAR359-1F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Marais - Martin III;411Website;411MARRIOTT
-P03-MAR359-1G;Cosy 2 Bedrooms with 1 Bathroom - Marais;MAR359-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Marais - Saint Martin IV;411Website;411MARRIOTT
-P01-THE13-1D;Luxury 4 bedroom 4 bathroom Apartment - Louvre;THE13-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Therese;411Website;411MARRIOTT
-P01-RIV85-1G;Cosy 3 bedroom & 2 bathroom apartment - Louvre;RIV85-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Louvre -Rivoli;411Website;411MARRIOTT
-P03-MAR326-3D;Cosy 2 bedrooms 1 bathroom apartment - Le Marais;MAR326-3D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Marais - Saint Martin V;411Website;411MARRIOTT
-P03-MAR326-3G;Cosy 2 bdr1 bthr apartment- Le Marais / Pompidou;MAR326-3G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Marais - Saint Martin VI;411Website;411MARRIOTT
-P02-POC5-3F;Cosy 5 Bedrooms and 2 Bathrooms - Le Marais;POC5-3F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Marais - Ponceau;411Website;411MARRIOTT
-P08-WAG20-0G;Cosy 2 bedrooms 1 bathroom apartment - Monceau;WAG20-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Champs Elysees - Wagram;411Website;411MARRIOTT
-P11-PEL8-0D;Cosy 7 Bedrooms 3 bathrooms  Le Marais;PEL8-0D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Marais - Pelee;411Website;411MARRIOTT
-P02-DAL40-1D;Cosy 2 bedroom with 1 bathroom-Opera;DAL40-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE; Merveil - Family Suite - Louvre - Dalayrac;411Website;411MARRIOTT
-P09-CAR7-0G;Cosy 3 bedroom and 2 Bathroom - Opera;CAR7-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Opera - Cardinal Mercier;411Website;411MARRIOTT
-P02-CAI31-2D;Luxury 3 Bedroom 2 Bathroom Suite - Louvre Marais;CAI31-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Caire I;411Website;411MARRIOTT
-P15-VIA29-1F;Cosy 2 bedroom - Eiffel Tower;VIA29-1F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Tour Eiffel - Viala II;411Website;411MARRIOTT
-P15-VIA29-1G;Cosy 3 bedroom 2 bathroom - Eiffel Tower;VIA29-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Tour Eiffel - Viala I;411Website;411MARRIOTT
-P09-CAU28-2G;Cosy 3 bedroom 2 bathroom - Louvre;CAU28-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Opera - Caumartin I;411Website;411MARRIOTT
-P09-CAU28-2D;Cosy 2 bedroom 1 bathroom - Louvre;CAU28-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Opera - Caumartin II;411Website;411MARRIOTT
-P15-FIN6-6F;Cozy 5 Bedroom & 3 Bathroom - Eiffel Tower;FIN6-6F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Tour Eiffel - Finlay;411Website;411MARRIOTT
-P15-FIN6-6;;FIN6-6;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;;411Website;411MARRIOTT
-P08-FRA12-1G;Cosy 4 Bedrooms 2 Bathr Apartment - Champs Elysées;FRA12-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Champs Elysees - Roosevelt;411Website;411MARRIOTT
-P05-MNG118-1D;Luxury 2 Bedroom - Notre Dame;MNG118-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Notre Dame - Monge;411Website;411MARRIOTT
-P03-REP23-1D;Luxury 5 Bedroom 3 bathroom - Marais Monument View;REP23-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Republique;411Website;411MARRIOTT
-P08-TRN13-0F;Cosy 3 bedroom & 2 bathroom Apartment - Opera;TRN13-0F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Opera - Turin;411Website;411MARRIOTT
-P02-ANN46-3G;Cosy 6 Bedroom & 3 bathroom Apartment - Louvre;ANN46-3G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Louvre - Sainte Anne;411Website;411MARRIOTT
-P04-MAR135-2F;Luxury 3 Bedroom & 3 Bathroom - Marais & Louvre;MAR135-2F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil Luxury Suite - Martin VII - Museum view;411Website;411MARRIOTT
-P11-RIC75-0D;Luxury 2 Bedroom & 1 Bathroom Suite - Marais;RIC75-0D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Lenoir III;411Website;411MARRIOTT
-P11-RIC75-0G;Luxury 3 Bedroom & 2 Bathroom Apartment - Marais;RIC75-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Lenoir II;411Website;411MARRIOTT
-P11-RIC75-0F;Luxury 2 Bedroom & 2 Bathroom Apartment - Marais;RIC75-0F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Lenoir I;411Website;411MARRIOTT
-P01-CHE6-3F;Luxury 3 Bdr & 3 Bthr - Champs Elysees & Louvre;CHE6-3F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Champs Elysees -St George;411Website;411MARRIOTT
-P11-FSA33-2D;Cosy 5 bedroom & 2 bathroom - Marais;FSA33-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Family Suite - Marais - Fbg St Antoine;411Website;411MARRIOTT
-P02-MIC18-4F;Luxury 4 Bedroom & 3 Bathroom Apartment - Louvre;MIC18-4F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Michodiere;411Website;411MARRIOTT
-P03-BSD9-1F;Luxury 4 Bedroom & 3 Bathroom Suite - Opéra Marais;BSD9-1F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite -Marais - Bvd Saint Denis;411Website;411MARRIOTT
-P09-RIE20-2D;;RIE20-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;;411Website;411MARRIOTT
-P09-RIE20-2D;;RIE20-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;;411Website;411MARRIOTT
-P16-KLE40-2F;Luxury 6 Bedroom & 5 Bathroom - Champs Elysees;KLE40-2F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Champs Elysees -Kleber;411Website;411MARRIOTT
-P05-BOU40-0G;Luxury 2 Bedroom & 2 Bathroom - Notre Dame;BOU40-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Notre Dame - Boulangers;411Website;411MARRIOTT
-P02-PAL7-1D;Luxury 4 Bedroom 3 Bathroom - Louvre & Marais;PAL7-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Palestro;411Website;411MARRIOTT
-P02-CAI12-3D;;CAI12-3D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;;411Website;411MARRIOTT
-P08-HOC16-7G;Luxury 7Br Champs-Elysees Eiffel Tower view;HOC16-7G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil Signature Suite Hoche - Eiffel Tower view;411Website;411MARRIOTT
-P09-BAT14-1;L'appartement n'est pas lancé;BAT14-1;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Opera - Bateliere;411Website;411MARRIOTT
-P07-GRE168-0G;Luxury 5 Bedroom & 5 Bathroom Suite - Eiffel Tower;GRE168-0G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite -Tour Eiffel- Grenelle I;411Website;411MARRIOTT
-P07-GRE168-0D;Luxury 3 Bedroom & 2 Bathroom Suite - Eiffel Tower;GRE168-0D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite -Tour Eiffel-Grenelle II;411Website;411MARRIOTT
-P08-MRI16-0D;Luxury 2 Bedroom & 2 Bathroom Suite-Champs-Elysees;MRI16-0D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite-Champs Elysees- Marignan;411Website;411MARRIOTT
-P02-BRS1-5F;L'appartement n'est pas lancé;BRS1-5F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Bourse I;411Website;411MARRIOTT
-P02-BRS1-5D;L'appartement n'est pas lancé;BRS1-5D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Louvre - Bourse II;411Website;411MARRIOTT
-P17-GOU71-3D;L'appartement n'est pas lancé;GOU71-3D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil Signature Suite - Cyr II - Private terrace;411Website;411MARRIOTT
-P03-TBG52-1G;Luxury 3 Bedroom & 3 Bathroom apartment Le Marais;TBG52-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Turbigo II;411Website;411MARRIOTT
-P03-TBG52-1G;Luxury 2 Bedroom & 2 Bathroom apartment Le Marais;TBG52-1G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Marais -Turbigo III;411Website;411MARRIOTT
-P02-CAI31-3D;Luxury 5 bedroom design apartment - Louvre Marais;CAI31-3D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Marais - Caire II;411Website;411MARRIOTT
-P06-VAU114-0G;;;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;;411Website;411MARRIOTT
-P09-ROU14-4G;Luxury 4 Bedroom & 4,5 Bathroom Apartment - Louvre;ROU14-4G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Opera - Rougemont III;411Website;411MARRIOTT
-P07-BGO41-0F;L'appartement n'est pas lancé;BGO41-0F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite -Tour Eiffel- Bourgogne;411Website;411MARRIOTT
-P03-ARC77-2G;Luxury 6 Bedroom & 6 Bathroom apartment - Marais;ARC77-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Marais - Archives II;411Website;411MARRIOTT
-P17-GOU71-2D;L'appartement n'est pas lancé;GOU71-2D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Champs Elysees - St Cyr I;411Website;411MARRIOTT
-P15-VIA1-2G;L'appartement n'est pas lancé;VIA1-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Tour Eiffel - Viala II;411Website;411MARRIOTT
-P03-TUR64-1D;L'appartement n'est pas lancé;TUR64-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Marais - Turenne;411Website;411MARRIOTT
-P15-VIA29-1D;L'appartement n'est pas lancé;VIA29-1D;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Tour Eiffel - Viala IV;411Website;411MARRIOTT
-P03-BRA4-2G;L'appartement n'est pas lancé;BRA4-2G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Marais - Braque;411Website;411MARRIOTT
-N92-DUL16-1F;L'appartement n'est pas lancé;DUL16-1F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Cozy Apartment - Champs Elysees - Dulud I;411Website;411MARRIOTT
-N92-DUL16-2F;L'appartement n'est pas lancé;;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Champs Elysees - Dulud II;411Website;411MARRIOTT
-N92-DUL16-3F;L'appartement n'est pas lancé;;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Champs Elysees -Dulud III;411Website;411MARRIOTT
-P15-DES3-5G;L'appartement n'est pas lancé;DES3-5G;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Tour Eiffel - Desaix I;411Website;411MARRIOTT
-P15-DES3-5F;L'appartement n'est pas lancé;DES3-5F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Signature Suite - Tour Eiffel -Desaix II;411Website;411MARRIOTT
-P17-ALF6-4F;L'appartement n'est pas lancé;ALF6-4F;411AIRBNB;411BOOKING;411VRBO;411PLUMGUIDE;Merveil - Luxury Suite - Champs Elysees - Roll;411Website;411MARRIOTT
-P08-ROY21-5G;;;;411BOOKING;;;;;
-;;FRE17B-2F;;411BOOKING;;;Merveil - Luxury Suite - Tour Eiffel - Fremicourt;;
+Code Appartement;Titre Airbnb Annonce;Code Comptable;Compte 411AIRBNB;Compte 411BOOKING;Compte 411VRBO;Compte 411PLUMGUIDE;Nom Appartement;Compte 411Website;Compte 411MARRIOTT
+P08-MER21-0G;Cocoon Loft Champs-Elysees Best Location in Paris;MER21-0G;411AIRBNB MER21-0G;411BOOKING MER21-0G;411VRBO MER21-0G;411PLUMGUIDE MER21-0G;Merveil - Luxury Suite - Champs Elysées - Mermoz;411Website MER21-0G;411MARRIOTT MER21-0G
+P01-STD97-1G;Luxury 3 Bedroom 2 Bathroom Loft - Louvre Museum;STD97-1G;411AIRBNB STD97-1G;411BOOKING STD97-1G;411VRBO STD97-1G;411PLUMGUIDE STD97-1G;Merveil - Luxury Suite - Marais - Saint Denis I;411Website STD97-1G;411MARRIOTT STD97-1G
+P08-ROY15-5D;Luxury 2 Bedroom - Louvre & Champs Elysees;ROY15-5D;411AIRBNB ROY15-5D;411BOOKING ROY15-5D;411VRBO ROY15-5D;411PLUMGUIDE ROY15-5D;Merveil - Luxury Suite - Champs Elysees - Royale I;411Website ROY15-5D;411MARRIOTT ROY15-5D
+P08-ROY15-6D;Luxury 2 Bedroom Duplex - Saint Honore View;ROY15-6D;411AIRBNB ROY15-6D;411BOOKING ROY15-6D;411VRBO ROY15-6D;411PLUMGUIDE ROY15-6D;Merveil Luxury Suite Royale II - Saint Honore view;411Website ROY15-6D;411MARRIOTT ROY15-6D
+P02-ABO52-0D;Luxury 3 bedroom 2 bathroom with AC - Louvre;ABO52-0D;411AIRBNB ABO52-0D;411BOOKING ABO52-0D;411VRBO ABO52-0D;411PLUMGUIDE ABO52-0D;Merveil - Luxury Suite - Louvre - Aboukir I;411Website ABO52-0D;411MARRIOTT ABO52-0D
+P02-ABO52-1F;Luxury 2 Bedroom 2 Bathroom Louvre & Marais;ABO52-1F;411AIRBNB ABO52-1F;411BOOKING ABO52-1F;411VRBO ABO52-1F;411PLUMGUIDE ABO52-1F;Merveil - Luxury Suite - Louvre - Aboukir II;411Website ABO52-1F;411MARRIOTT ABO52-1F
+P02-ABO52-2G;Luxury 2 bedroom 2 bathroom - Louvre;ABO52-2G;411AIRBNB ABO52-2G;411BOOKING ABO52-2G;411VRBO ABO52-2G;411PLUMGUIDE ABO52-2G;Merveil - Luxury Suite - Louvre - Aboukir III;411Website ABO52-2G;411MARRIOTT ABO52-2G
+P02-ABO52-2D;Luxury 2 Bedroom 2 Bathroom - Louvre Museum;ABO52-2D;411AIRBNB ABO52-2D;411BOOKING ABO52-2D;411VRBO ABO52-2D;411PLUMGUIDE ABO52-2D;Merveil - Luxury Suite - Louvre - Aboukir IV;411Website ABO52-2D;411MARRIOTT ABO52-2D
+P01-RAM80-1G;Luxury 4 bedroom 2 bathroom Apartment - Louvre;RAM80-1G;411AIRBNB RAM80-1G;411BOOKING RAM80-1G;411VRBO RAM80-1G;411PLUMGUIDE RAM80-1G;Merveil - Luxury Suite - Louvre - Rambuteau;411Website RAM80-1G;411MARRIOTT RAM80-1G
+P02-ABO69-1D;Luxury 3 bedroom 2 bathroom Palace Apartment - AC;ABO69-1D;411AIRBNB ABO69-1D;411BOOKING ABO69-1D;411VRBO ABO69-1D;411PLUMGUIDE ABO69-1D;Merveil - Luxury Suite - Louvre - Aboukir V;411Website ABO69-1D;411MARRIOTT ABO69-1D
+P02-ABO69-2D;Luxury Royale 3 bedroom, 2 bathroom;ABO69-2D;411AIRBNB ABO69-2D;411BOOKING ABO69-2D;411VRBO ABO69-2D;411PLUMGUIDE ABO69-2D;Merveil - Luxury Suite - Louvre - Aboukir VI;411Website ABO69-2D;411MARRIOTT ABO69-2D
+P03-ARC74-0G;Luxury 3 bedroom Apartment - Le Marais;ARC74-0G;411AIRBNB ARC74-0G;411BOOKING ARC74-0G;411VRBO ARC74-0G;411PLUMGUIDE ARC74-0G;Merveil - Luxury Suite - Marais - Archives I;411Website ARC74-0G;411MARRIOTT ARC74-0G
+P07-LAB77-0D;Luxury 2 Bedroom apartment - Eiffel Tower;LAB77-0D;411AIRBNB LAB77-0D;411BOOKING LAB77-0D;411VRBO LAB77-0D;411PLUMGUIDE LAB77-0D;Merveil - Luxury Suite - Tour Eiffel - Bourdonnais;411Website LAB77-0D;411MARRIOTT LAB77-0D
+P01-SEB23-3F;Luxury 2 bedroom apartment with Balcony - Louvre;SEB23-3F;411AIRBNB SEB23-3F;411BOOKING SEB23-3F;411VRBO SEB23-3F;411PLUMGUIDE SEB23-3F;Merveil - Luxury Suite - Louvre -Sebastopol I;411Website SEB23-3F;411MARRIOTT SEB23-3F
+P01-SEB23-3G;Luxury 2 bedroom 2,5 bathroom Louvre & Notre Dame;SEB23-3G;411AIRBNB SEB23-3G;411BOOKING SEB23-3G;411VRBO SEB23-3G;411PLUMGUIDE SEB23-3G;Merveil - Luxury Suite - Louvre - Sebastopol II;411Website SEB23-3G;411MARRIOTT SEB23-3G
+P01-SEB23-3F&3G;Merveil Connecting Luxury Suites - Sebastopol I-II;SEB23-3FG;411AIRBNB SEB23-3FG;411BOOKING SEB23-3FG;411VRBO SEB23-3FG;411PLUMGUIDE SEB23-3FG;Merveil Connecting Luxury Suites - Sebastopol I-II;411Website SEB23-3FG;411MARRIOTT SEB23-3FG
+P01-VAL1B-1G;Luxury 6Bdr 5Bth in Heritage Building-Louvre view;VAL1B-1G;411AIRBNB VAL1B-1G;411BOOKING VAL1B-1G;411VRBO VAL1B-1G;411PLUMGUIDE VAL1B-1G;Merveil Signature Suite - Valois - Louvre view;411Website VAL1B-1G;411MARRIOTT VAL1B-1G
+P02-ETI16-2F;Luxury 3 Bdr 3 Bthr Apartment in Heritage Building;ETI16-2F;411AIRBNB ETI16-2F;411BOOKING ETI16-2F;411VRBO ETI16-2F;411PLUMGUIDE ETI16-2F;Merveil - Signature Suite - Louvre - Marcel I;411Website ETI16-2F;411MARRIOTT ETI16-2F
+P02-ETI16-2D;Luxury 2 bedroom 1 Bathroom Louvre & Notre Dame;ETI16-2D;411AIRBNB ETI16-2D;411BOOKING ETI16-2D;411VRBO ETI16-2D;411PLUMGUIDE ETI16-2D;Merveil - Luxury Suite - Louvre - Marcel II;411Website ETI16-2D;411MARRIOTT ETI16-2D
+P15-LAO4-0G;Luxury 2 Bedroom 2 Bathroom - Eiffel Tower;LAO4-0G;411AIRBNB LAO4-0G;411BOOKING LAO4-0G;411VRBO LAO4-0G;411PLUMGUIDE LAO4-0G;Merveil - Luxury Suite - Tour Eiffel - Laos;411Website LAO4-0G;411MARRIOTT LAO4-0G
+P01-VIC18-2G;Luxury 5 bedroom 3 bathroom Louvre - Notre Dame;VIC18-2G;411AIRBNB VIC18-2G;411BOOKING VIC18-2G;411VRBO VIC18-2G;411PLUMGUIDE VIC18-2G;Merveil - Signature Suite - Louvre - Victoria;411Website VIC18-2G;411MARRIOTT VIC18-2G
+P08-PON48-1D;Luxury 4 bdr 2 bthr Apartment - Champs Elysees;PON48-1D;411AIRBNB PON48-1D;411BOOKING PON48-1D;411VRBO PON48-1D;411PLUMGUIDE PON48-1D;Merveil - Luxury Suite -Champs Elysees- Ponthieu I;411Website PON48-1D;411MARRIOTT PON48-1D
+P08-PON48-1G;Luxury 2 bedroom Apartment - Champs Elysees;PON48-1G;411AIRBNB PON48-1G;411BOOKING PON48-1G;411VRBO PON48-1G;411PLUMGUIDE PON48-1G;Merveil - Luxury Suite -Champs Elysees-Ponthieu II;411Website PON48-1G;411MARRIOTT PON48-1G
+P02-REA110-2F;Luxury 4 bedroom 2 bathroom Apartment - Louvre;REA110-2F;411AIRBNB REA110-2F;411BOOKING REA110-2F;411VRBO REA110-2F;411PLUMGUIDE REA110-2F;Merveil - Luxury Suite - Louvre - Reaumur I;411Website REA110-2F;411MARRIOTT REA110-2F
+P02-REA110-2G;Luxury 3 bedroom 2 bathroom apartment - Louvre;REA110-2G;411AIRBNB REA110-2G;411BOOKING REA110-2G;411VRBO REA110-2G;411PLUMGUIDE REA110-2G;Merveil - Luxury Suite - Louvre - Reaumur II;411Website REA110-2G;411MARRIOTT REA110-2G
+P03-CHA73-0D;Luxury 2 Bedroom - Le Marais;CHA73-0D;411AIRBNB CHA73-0D;411BOOKING CHA73-0D;411VRBO CHA73-0D;411PLUMGUIDE CHA73-0D;Merveil - Luxury Suite - Marais - Charlot;411Website CHA73-0D;411MARRIOTT CHA73-0D
+P04-LOU18-0D;Luxury 3 bedrooms 2 Bathrooms - Ile saint-Louis;LOU18-0D;411AIRBNB LOU18-0D;411BOOKING LOU18-0D;411VRBO LOU18-0D;411PLUMGUIDE LOU18-0D;Merveil - Luxury Suite - Notre-Dame - Saint Louis;411Website LOU18-0D;411MARRIOTT LOU18-0D
+P03-MAR181-1G;Luxury 3 bedroom and 3 bathroom -Louvre Marais;MAR181-1G;411AIRBNB MAR181-1G;411BOOKING MAR181-1G;411VRBO MAR181-1G;411PLUMGUIDE MAR181-1G;Merveil - Luxury Suite - Marais - Saint Martin I;411Website MAR181-1G;411MARRIOTT MAR181-1G
+P03-MAR181-2G;Luxury 3 bedroom and 3 bathroom -Louvre Museum;MAR181-2G;411AIRBNB MAR181-2G;411BOOKING MAR181-2G;411VRBO MAR181-2G;411PLUMGUIDE MAR181-2G;Merveil - Luxury Suite - Marais - Saint Martin II;411Website MAR181-2G;411MARRIOTT MAR181-2G
+P07-BAC116-1G;Luxury 2 Bedroom - Eiffel-Tower & Orsay Museum;BAC116-1G;411AIRBNB BAC116-1G;411BOOKING BAC116-1G;411VRBO BAC116-1G;411PLUMGUIDE BAC116-1G;Merveil - Luxury Suite - Tour Eiffel - Bac I;411Website BAC116-1G;411MARRIOTT BAC116-1G
+P07-BAC116-1D;Luxury 2 Bedroom Eiffel-Tower with Terrace;BAC116-1D;411AIRBNB BAC116-1D;411BOOKING BAC116-1D;411VRBO BAC116-1D;411PLUMGUIDE BAC116-1D;Merveil - Luxury Suite - Tour Eiffel - Bac II;411Website BAC116-1D;411MARRIOTT BAC116-1D
+P08-FLO13-1F;Luxury 3 bedroom & 2 bathroom;FLO13-1F;411AIRBNB FLO13-1F;411BOOKING FLO13-1F;411VRBO FLO13-1F;411PLUMGUIDE FLO13-1F;Merveil - Luxury Suite -ChampsElysees- Florentin I;411Website FLO13-1F;411MARRIOTT FLO13-1F
+P08-FLO13-1G;Luxury 3 bedroom 2 bathroom apartment - Louvre;FLO13-1G;411AIRBNB FLO13-1G;411BOOKING FLO13-1G;411VRBO FLO13-1G;411PLUMGUIDE FLO13-1G;Merveil - Luxury Suite -ChampsElysees-Florentin II;411Website FLO13-1G;411MARRIOTT FLO13-1G
+P02-VOL18-2G;Luxury 2 Bdr 1 Bthr - Louvre Museum & Opera;VOL18-2G;411AIRBNB VOL18-2G;411BOOKING VOL18-2G;411VRBO VOL18-2G;411PLUMGUIDE VOL18-2G;Merveil - Luxury Suite -Opera - Volney I;411Website VOL18-2G;411MARRIOTT VOL18-2G
+P02-VOL18-2D;Luxury 2 Bdr & 2 Bthr - Louvre Museum & Opera;VOL18-2D;411AIRBNB VOL18-2D;411BOOKING VOL18-2D;411VRBO VOL18-2D;411PLUMGUIDE VOL18-2D;Merveil - Luxury Suite -Opera - Volney II;411Website VOL18-2D;411MARRIOTT VOL18-2D
+P03-OUR12-1G;Luxury 2 bedroom - Marais & Louvre;OUR12-1G;411AIRBNB OUR12-1G;411BOOKING OUR12-1G;411VRBO OUR12-1G;411PLUMGUIDE OUR12-1G;Merveil - Luxury Suite - Louvre - Ours I;411Website OUR12-1G;411MARRIOTT OUR12-1G
+P03-OUR12-1D;Luxury 2 bedroom & 2 bathroom - Marais & Louvre;OUR12-1D;411AIRBNB OUR12-1D;411BOOKING OUR12-1D;411VRBO OUR12-1D;411PLUMGUIDE OUR12-1D;Merveil - Luxury Suite - Louvre - Ours II;411Website OUR12-1D;411MARRIOTT OUR12-1D
+P02-ABO108-2G;Luxury 4 bedrooms 3 Bathrooms - Louvre;ABO108-2G;411AIRBNB ABO108-2G;411BOOKING ABO108-2G;411VRBO ABO108-2G;411PLUMGUIDE ABO108-2G;Merveil - Luxury Suite - Louvre - Aboukir VII;411Website ABO108-2G;411MARRIOTT ABO108-2G
+P04-ANT10-1G;Luxury 4 bedrooms 2 bathrooms apartment Le Marais;ANT10-1G;411AIRBNB ANT10-1G;411BOOKING ANT10-1G;411VRBO ANT10-1G;411PLUMGUIDE ANT10-1G;Merveil - Luxury Suite - Marais - Antoine I;411Website ANT10-1G;411MARRIOTT ANT10-1G
+P04-ANT10-2G;Luxury 3 bedrooms 2 bathrooms apartment Le Marais;ANT10-2G;411AIRBNB ANT10-2G;411BOOKING ANT10-2G;411VRBO ANT10-2G;411PLUMGUIDE ANT10-2G;Merveil - Luxury Suite - Marais - Antoine II;411Website ANT10-2G;411MARRIOTT ANT10-2G
+P08-BOI41-2D;Luxury 5 Bedroom 3 Bathroom Louvre Champs Elysees;BOI41-2D;411AIRBNB BOI41-2D;411BOOKING BOI41-2D;411VRBO BOI41-2D;411PLUMGUIDE BOI41-2D;Merveil - Luxury Suite - Champs Elysees - Boissy;411Website BOI41-2D;411MARRIOTT BOI41-2D
+P02-QUA24-4F;Luxury  5 Bedrooms -3 Bathrooms Apartment  - Opera;QUA24-4F;411AIRBNB QUA24-4F;411BOOKING QUA24-4F;411VRBO QUA24-4F;411PLUMGUIDE QUA24-4F;Merveil - Luxury Suite - Opera - Septembre I;411Website QUA24-4F;411MARRIOTT QUA24-4F
+P02-QUA24-4D;Luxury 2 bedrooms with 2 Bathrooms - Opéra;QUA24-4D;411AIRBNB QUA24-4D;411BOOKING QUA24-4D;411VRBO QUA24-4D;411PLUMGUIDE QUA24-4D;Merveil - Luxury Suite - Opera - Septembre II;411Website QUA24-4D;411MARRIOTT QUA24-4D
+P08-MON58-0G;Cosy 3 Bedroom 2 bathroom apartment Champs Elysees;MON58-0G;411AIRBNB MON58-0G;411BOOKING MON58-0G;411VRBO MON58-0G;411PLUMGUIDE MON58-0G;Merveil - Family Suite - Champs Elysees - Monceau;411Website MON58-0G;411MARRIOTT MON58-0G
+P01-OPE18-4D;Luxury 4 Bdr 3 bthr Apartment  - Opera Louvre;OPE18-4D;411AIRBNB OPE18-4D;411BOOKING OPE18-4D;411VRBO OPE18-4D;411PLUMGUIDE OPE18-4D;Merveil - Luxury Suite - Louvre - Opera I;411Website OPE18-4D;411MARRIOTT OPE18-4D
+P01-OPE18-4G;Luxury 3 bdr 2 bthr Apartment  - Opera Louvre;OPE18-4G;411AIRBNB OPE18-4G;411BOOKING OPE18-4G;411VRBO OPE18-4G;411PLUMGUIDE OPE18-4G;Merveil - Luxury Suite - Louvre - Opera II;411Website OPE18-4G;411MARRIOTT OPE18-4G
+P01-MTM13-2G;Luxury 3 bedroom & 2 bathroom Suite- Marais Louvre;MTM13-2G;411AIRBNB MTM13-2G;411BOOKING MTM13-2G;411VRBO MTM13-2G;411PLUMGUIDE MTM13-2G;Merveil - Signature Suite - Marais - Montmartre;411Website MTM13-2G;411MARRIOTT MTM13-2G
+P15-FRE17B-2F;Luxury 4 Bedroom & 2 Bathroom - Eiffel Tower;FRE17B-2F;411AIRBNB FRE17B-2F;411BOOKING FRE17B-2F;411VRBO FRE17B-2F;411PLUMGUIDE FRE17B-2F;Merveil - Luxury Suite - Tour Eiffel - Fremicourt;411Website FRE17B-2F;411MARRIOTT FRE17B-2F
+P01-JJR27-1F;Luxury 2 bedroom Apartment - Louvre Museum;JJR27-1F;411AIRBNB JJR27-1F;411BOOKING JJR27-1F;411VRBO JJR27-1F;411PLUMGUIDE JJR27-1F;Merveil - Luxury Suite - Louvre - Rousseau;411Website JJR27-1F;411MARRIOTT JJR27-1F
+P02-SEN18-3D;Cosy 2 bedrooms apartment - Louvre Museum;SEN18-3D;411AIRBNB SEN18-3D;411BOOKING SEN18-3D;411VRBO SEN18-3D;411PLUMGUIDE SEN18-3D;Merveil - Family Suite - Louvre - Sentier I;411Website SEN18-3D;411MARRIOTT SEN18-3D
+P02-CLE7-0D;Cosy 3 bedroom duplex apartment (stairs) - Louvre;CLE7-0D;411AIRBNB CLE7-0D;411BOOKING CLE7-0D;411VRBO CLE7-0D;411PLUMGUIDE CLE7-0D;Merveil - Family Suite - Louvre - Clery;411Website CLE7-0D;411MARRIOTT CLE7-0D
+P03-SEB44-1D;Cosy 3 bedroom apartment 1 bthr - Louvre Museum;SEB44-1D;411AIRBNB SEB44-1D;411BOOKING SEB44-1D;411VRBO SEB44-1D;411PLUMGUIDE SEB44-1D;Merveil - Family Suite - Marais - Sebastopol III;411Website SEB44-1D;411MARRIOTT SEB44-1D
+P16-GRA41-1G;Cosy 3 bedrooms Apartment - Champs Elysees;GRA41-1G;411AIRBNB GRA41-1G;411BOOKING GRA41-1G;411VRBO GRA41-1G;411PLUMGUIDE GRA41-1G;Merveil - Family Suite - Champs Elysees - Armee;411Website GRA41-1G;411MARRIOTT GRA41-1G
+P10-POI8-1D;Luxury 2 Bedroom apartment - Louvre & Opera;POI8-1D;411AIRBNB POI8-1D;411BOOKING POI8-1D;411VRBO POI8-1D;411PLUMGUIDE POI8-1D;Merveil - Luxury Suite - Marais - Poissonniere;411Website POI8-1D;411MARRIOTT POI8-1D
+P08-HAU152-0G;Luxury 2 bdr 1 bthr with bathtub - Champs-Elysees;HAU152-0G;411AIRBNB HAU152-0G;411BOOKING HAU152-0G;411VRBO HAU152-0G;411PLUMGUIDE HAU152-0G;Merveil - Luxury Suite -Champs Elysees-Haussmann I;411Website HAU152-0G;411MARRIOTT HAU152-0G
+P08-HAU152-0D;Luxury 2 bedroom 1 bthr apartment - Champs-Elysees;HAU152-0D;411AIRBNB HAU152-0D;411BOOKING HAU152-0D;411VRBO HAU152-0D;411PLUMGUIDE HAU152-0D;Merveil -Luxury Suite -Champs Elysees-Haussmann II;411Website HAU152-0D;411MARRIOTT HAU152-0D
+P02-ABO58-1D;Cosy 3 bedrooms apartment - Louvre & Marais;ABO58-1D;411AIRBNB ABO58-1D;411BOOKING ABO58-1D;411VRBO ABO58-1D;411PLUMGUIDE ABO58-1D;Merveil - Family Suite - Louvre - Aboukir VIII;411Website ABO58-1D;411MARRIOTT ABO58-1D
+P02-SEN18-2G;Cozy 3 bedrooms apartment - Louvre & Opéra;SEN18-2G;411AIRBNB SEN18-2G;411BOOKING SEN18-2G;411VRBO SEN18-2G;411PLUMGUIDE SEN18-2G;Merveil - Family Suite - Louvre - Sentier II;411Website SEN18-2G;411MARRIOTT SEN18-2G
+P08-MOL3-0G;Cosy 2 bedroom 1 bathroom- Parc Monceau;MOL3-0G;411AIRBNB MOL3-0G;411BOOKING MOL3-0G;411VRBO MOL3-0G;411PLUMGUIDE MOL3-0G;Merveil - Family Suite - Champs Elysees - Mollien;411Website MOL3-0G;411MARRIOTT MOL3-0G
+P09-GOD9-2F;Luxury 6 Bedroom 3 Bathroom Louvre Champs Elysees;GOD9-2F;411AIRBNB GOD9-2F;411BOOKING GOD9-2F;411VRBO GOD9-2F;411PLUMGUIDE GOD9-2F;Merveil - Luxury Suite - Champs Elysees - Mauroy I;411Website GOD9-2F;411MARRIOTT GOD9-2F
+P03-TBG77-1D;Cosy 3 bedrooms apartment - Le Marais;TBG77-1D;411AIRBNB TBG77-1D;411BOOKING TBG77-1D;411VRBO TBG77-1D;411PLUMGUIDE TBG77-1D;Merveil - Family Suite - Marais - Turbigo I;411Website TBG77-1D;411MARRIOTT TBG77-1D
+P02-NDV14-1D;Cosy 5 bedrooms with patio - Louvre Museum;NDV14-1D;411AIRBNB NDV14-1D;411BOOKING NDV14-1D;411VRBO NDV14-1D;411PLUMGUIDE NDV14-1D;Merveil - Family suite - Louvre - Victoires;411Website NDV14-1D;411MARRIOTT NDV14-1D
+P08-CAS6-1D;Luxury 6 bedrooms 3 bathrooms apartment - Opera;CAS6-1D;411AIRBNB CAS6-1D;411BOOKING CAS6-1D;411VRBO CAS6-1D;411PLUMGUIDE CAS6-1D;Merveil - Family Suite - Opera - Castellane;411Website CAS6-1D;411MARRIOTT CAS6-1D
+P02-ABO94-1D;Luxury 2 Bedroom & 2 Bathroom - Marais;ABO94-1D;411AIRBNB ABO94-1D;411BOOKING ABO94-1D;411VRBO ABO94-1D;411PLUMGUIDE ABO94-1D;Merveil - Luxury Suite - Louvre - Aboukir IX;411Website ABO94-1D;411MARRIOTT ABO94-1D
+P08-TIL14-5G;Cosy 4 bedrooms with Balcony - Champs Elysees;TIL14-5G;411AIRBNB TIL14-5G;411BOOKING TIL14-5G;411VRBO TIL14-5G;411PLUMGUIDE TIL14-5G;Merveil Family Suite - Tilsitt - Eiffel Tower view;411Website TIL14-5G;411MARRIOTT TIL14-5G
+P02-STD250-1D;Cosy 2 bedrooms apartment with bathrooms - Louvre;STD250-1D;411AIRBNB STD250-1D;411BOOKING STD250-1D;411VRBO STD250-1D;411PLUMGUIDE STD250-1D;Merveil - Family Suite - Marais - Saint Denis II;411Website STD250-1D;411MARRIOTT STD250-1D
+P09-GOD24-0F;Cosy 3 bedrooms Townhouse Louvre & Champs-Elysees;GOD24-0F;411AIRBNB GOD24-0F;411BOOKING GOD24-0F;411VRBO GOD24-0F;411PLUMGUIDE GOD24-0F;Merveil - Family Suite - Opera - Mauroy II;411Website GOD24-0F;411MARRIOTT GOD24-0F
+P09-ROU14-1G;Luxury 2 Bedroom & 2 Bathroom Apartment - Louvre;ROU14-1G;411AIRBNB ROU14-1G;411BOOKING ROU14-1G;411VRBO ROU14-1G;411PLUMGUIDE ROU14-1G;Merveil - Luxury Suite - Opera - Rougemont I;411Website ROU14-1G;411MARRIOTT ROU14-1G
+P09-ROU14-1D;Luxury 3 Bedroom & 3.5 Bathroom Apartment - Louvre;ROU14-1D;411AIRBNB ROU14-1D;411BOOKING ROU14-1D;411VRBO ROU14-1D;411PLUMGUIDE ROU14-1D;Merveil - Luxury Suite - Opera - Rougemont II;411Website ROU14-1D;411MARRIOTT ROU14-1D
+P01-ETI39-1F;Luxury 5 Bedroom 4 Bathroom - Louvre & Notre Dame;ETI39-1F;411AIRBNB ETI39-1F;411BOOKING ETI39-1F;411VRBO ETI39-1F;411PLUMGUIDE ETI39-1F;Merveil - Luxury Suite - Louvre - Marcel III;411Website ETI39-1F;411MARRIOTT ETI39-1F
+P03-MAR359-1F;Cosy 3 Bedrooms Apartment - 2 Bathrooms - Marais;MAR359-1F;411AIRBNB MAR359-1F;411BOOKING MAR359-1F;411VRBO MAR359-1F;411PLUMGUIDE MAR359-1F;Merveil - Family Suite - Marais - Martin III;411Website MAR359-1F;411MARRIOTT MAR359-1F
+P03-MAR359-1G;Cosy 2 Bedrooms with 1 Bathroom - Marais;MAR359-1G;411AIRBNB MAR359-1G;411BOOKING MAR359-1G;411VRBO MAR359-1G;411PLUMGUIDE MAR359-1G;Merveil - Family Suite - Marais - Martin IV;411Website MAR359-1G;411MARRIOTT MAR359-1G
+P01-THE13-1D;Luxury 4 bedroom 4 bathroom Apartment - Louvre;THE13-1D;411AIRBNB THE13-1D;411BOOKING THE13-1D;411VRBO THE13-1D;411PLUMGUIDE THE13-1D;Merveil - Luxury Suite - Louvre - Therese;411Website THE13-1D;411MARRIOTT THE13-1D
+P01-RIV85-1G;Cosy 3 bedroom & 2 bathroom apartment - Louvre;RIV85-1G;411AIRBNB RIV85-1G;411BOOKING RIV85-1G;411VRBO RIV85-1G;411PLUMGUIDE RIV85-1G;Merveil - Family Suite - Louvre - Rivoli;411Website RIV85-1G;411MARRIOTT RIV85-1G
+P03-MAR326-3D;Cosy 2 bedrooms 1 bathroom apartment - Le Marais;MAR326-3D;411AIRBNB MAR326-3D;411BOOKING MAR326-3D;411VRBO MAR326-3D;411PLUMGUIDE MAR326-3D;Merveil - Family Suite - Marais - Martin V;411Website MAR326-3D;411MARRIOTT MAR326-3D
+P03-MAR326-3G;Cosy 2 bdr1 bthr apartment- Le Marais / Pompidou;MAR326-3G;411AIRBNB MAR326-3G;411BOOKING MAR326-3G;411VRBO MAR326-3G;411PLUMGUIDE MAR326-3G;Merveil - Family Suite - Marais - Martin VI;411Website MAR326-3G;411MARRIOTT MAR326-3G
+P02-POC5-3F;Cosy 5 Bedrooms and 2 Bathrooms - Le Marais;POC5-3F;411AIRBNB POC5-3F;411BOOKING POC5-3F;411VRBO POC5-3F;411PLUMGUIDE POC5-3F;Merveil - Family Suite - Marais - Ponceau;411Website POC5-3F;411MARRIOTT POC5-3F
+P08-WAG20-0G;Cosy 2 bedrooms 1 bathroom apartment - Monceau;WAG20-0G;411AIRBNB WAG20-0G;411BOOKING WAG20-0G;411VRBO WAG20-0G;411PLUMGUIDE WAG20-0G;Merveil - Family Suite - Champs Elysees - Wagram;411Website WAG20-0G;411MARRIOTT WAG20-0G
+P11-PEL8-0D;Cosy 7 Bedrooms 3 bathrooms  Le Marais;PEL8-0D;411AIRBNB PEL8-0D;411BOOKING PEL8-0D;411VRBO PEL8-0D;411PLUMGUIDE PEL8-0D;Merveil - Family Suite - Marais - Pelee;411Website PEL8-0D;411MARRIOTT PEL8-0D
+P02-DAL40-1D;Cosy 2 bedroom with 1 bathroom-Opera;DAL40-1D;411AIRBNB DAL40-1D;411BOOKING DAL40-1D;411VRBO DAL40-1D;411PLUMGUIDE DAL40-1D;Merveil - Family Suite - Louvre - Dalayrac;411Website DAL40-1D;411MARRIOTT DAL40-1D
+P09-CAR7-0G;Cosy 3 bedroom and 2 Bathroom - Opera;CAR7-0G;411AIRBNB CAR7-0G;411BOOKING CAR7-0G;411VRBO CAR7-0G;411PLUMGUIDE CAR7-0G;Merveil - Family Suite - Opera - Cardinal Mercier;411Website CAR7-0G;411MARRIOTT CAR7-0G
+P02-CAI31-2D;Luxury 3 Bedroom 2 Bathroom Suite - Louvre Marais;CAI31-2D;411AIRBNB CAI31-2D;411BOOKING CAI31-2D;411VRBO CAI31-2D;411PLUMGUIDE CAI31-2D;Merveil - Luxury Suite - Marais - Caire I;411Website CAI31-2D;411MARRIOTT CAI31-2D
+P15-VIA29-1F;Cosy 2 bedroom - Eiffel Tower;VIA29-1F;411AIRBNB VIA29-1F;411BOOKING VIA29-1F;411VRBO VIA29-1F;411PLUMGUIDE VIA29-1F;Merveil - Family Suite - Tour Eiffel - Viala I;411Website VIA29-1F;411MARRIOTT VIA29-1F
+P15-VIA29-1G;Cosy 3 bedroom 2 bathroom - Eiffel Tower;VIA29-1G;411AIRBNB VIA29-1G;411BOOKING VIA29-1G;411VRBO VIA29-1G;411PLUMGUIDE VIA29-1G;Merveil - Family Suite - Tour Eiffel - Viala II;411Website VIA29-1G;411MARRIOTT VIA29-1G
+P09-CAU28-2G;Cosy 3 bedroom 2 bathroom - Louvre;CAU28-2G;411AIRBNB CAU28-2G;411BOOKING CAU28-2G;411VRBO CAU28-2G;411PLUMGUIDE CAU28-2G;Merveil - Family Suite - Opera - Caumartin I;411Website CAU28-2G;411MARRIOTT CAU28-2G
+P09-CAU28-2D;Cosy 2 bedroom 1 bathroom - Louvre;CAU28-2D;411AIRBNB CAU28-2D;411BOOKING CAU28-2D;411VRBO CAU28-2D;411PLUMGUIDE CAU28-2D;Merveil - Family Suite - Opera - Caumartin II;411Website CAU28-2D;411MARRIOTT CAU28-2D
+P15-FIN6-6F;Cozy 5 Bedroom & 3 Bathroom - Eiffel Tower;FIN6-6F;411AIRBNB FIN6-6F;411BOOKING FIN6-6F;411VRBO FIN6-6F;411PLUMGUIDE FIN6-6F;Merveil - Family Suite - Tour Eiffel - Finlay;411Website FIN6-6F;411MARRIOTT FIN6-6F
+P15-FIN6-6;;FIN6-6;411AIRBNB FIN6-6;411BOOKING FIN6-6;411VRBO FIN6-6;411PLUMGUIDE FIN6-6;;411Website FIN6-6;411MARRIOTT FIN6-6
+P08-FRA12-1G;Cosy 4 Bedrooms 2 Bathr Apartment - Champs Elysées;FRA12-1G;411AIRBNB FRA12-1G;411BOOKING FRA12-1G;411VRBO FRA12-1G;411PLUMGUIDE FRA12-1G;Merveil Family Suite - Champs Elysees - Roosevelt;411Website FRA12-1G;411MARRIOTT FRA12-1G
+P05-MNG118-1D;Luxury 2 Bedroom - Notre Dame;MNG118-1D;411AIRBNB MNG118-1D;411BOOKING MNG118-1D;411VRBO MNG118-1D;411PLUMGUIDE MNG118-1D;Merveil - Luxury Suite - Notre Dame - Monge;411Website MNG118-1D;411MARRIOTT MNG118-1D
+P03-REP23-1D;Luxury 5 Bedroom 3 bathroom - Marais Monument View;REP23-1D;411AIRBNB REP23-1D;411BOOKING REP23-1D;411VRBO REP23-1D;411PLUMGUIDE REP23-1D;Merveil - Luxury Suite - Marais - Republique;411Website REP23-1D;411MARRIOTT REP23-1D
+P08-TRN13-0F;Cosy 3 bedroom & 2 bathroom Apartment - Opera;TRN13-0F;411AIRBNB TRN13-0F;411BOOKING TRN13-0F;411VRBO TRN13-0F;411PLUMGUIDE TRN13-0F;Merveil - Family Suite - Opera - Turin;411Website TRN13-0F;411MARRIOTT TRN13-0F
+P02-ANN46-3G;Cosy 6 Bedroom & 3 bathroom Apartment - Louvre;ANN46-3G;411AIRBNB ANN46-3G;411BOOKING ANN46-3G;411VRBO ANN46-3G;411PLUMGUIDE ANN46-3G;Merveil - Family Suite - Louvre - Sainte Anne;411Website ANN46-3G;411MARRIOTT ANN46-3G
+P04-MAR135-2F;Luxury 3 Bedroom & 3 Bathroom - Marais & Louvre;MAR135-2F;411AIRBNB MAR135-2F;411BOOKING MAR135-2F;411VRBO MAR135-2F;411PLUMGUIDE MAR135-2F;Merveil Luxury Suite - Martin VII - Museum view;411Website MAR135-2F;411MARRIOTT MAR135-2F
+P11-RIC75-0D;;RIC75-0D;411AIRBNB RIC75-0D;411BOOKING RIC75-0D;411VRBO RIC75-0D;411PLUMGUIDE RIC75-0D;Merveil - Luxury Suite - Marais - Lenoir III;411Website RIC75-0D;411MARRIOTT RIC75-0D
+P11-RIC75-0G;Luxury 3 Bedroom & 2 Bathroom Apartment - Marais;RIC75-0G;411AIRBNB RIC75-0G;411BOOKING RIC75-0G;411VRBO RIC75-0G;411PLUMGUIDE RIC75-0G;Merveil - Luxury Suite - Marais - Lenoir II;411Website RIC75-0G;411MARRIOTT RIC75-0G
+P11-RIC75-0F;Luxury 2 Bedroom & 2 Bathroom Apartment - Marais;RIC75-0F;411AIRBNB RIC75-0F;411BOOKING RIC75-0F;411VRBO RIC75-0F;411PLUMGUIDE RIC75-0F;Merveil - Luxury Suite - Marais - Lenoir I;411Website RIC75-0F;411MARRIOTT RIC75-0F
+P01-CHE6-3F;Luxury 3 Bdr & 3 Bthr - Champs Elysees & Louvre;CHE6-3F;411AIRBNB CHE6-3F;411BOOKING CHE6-3F;411VRBO CHE6-3F;411PLUMGUIDE CHE6-3F;Merveil - Luxury Suite - Champs Elysees -St George;411Website CHE6-3F;411MARRIOTT CHE6-3F
+P11-FSA33-2D;Cosy 5 bedroom & 2 bathroom - Marais;FSA33-2D;411AIRBNB FSA33-2D;411BOOKING FSA33-2D;411VRBO FSA33-2D;411PLUMGUIDE FSA33-2D;Merveil - Family Suite - Marais - Fbg St Antoine;411Website FSA33-2D;411MARRIOTT FSA33-2D
+P02-MIC18-4F;Luxury 4 Bedroom & 3 Bathroom Apartment - Louvre;MIC18-4F;411AIRBNB MIC18-4F;411BOOKING MIC18-4F;411VRBO MIC18-4F;411PLUMGUIDE MIC18-4F;Merveil - Luxury Suite - Louvre - Michodiere;411Website MIC18-4F;411MARRIOTT MIC18-4F
+P03-BSD9-1F;Luxury 4 Bedroom & 3 Bathroom Suite - Opéra Marais;BSD9-1F;411AIRBNB BSD9-1F;411BOOKING BSD9-1F;411VRBO BSD9-1F;411PLUMGUIDE BSD9-1F;Merveil - Luxury Suite - Marais - Bvd Saint Denis;411Website BSD9-1F;411MARRIOTT BSD9-1F
+P09-RIE20-2D;;RIE20-2D;411AIRBNB RIE20-2D;411BOOKING RIE20-2D;411VRBO RIE20-2D;411PLUMGUIDE RIE20-2D;;411Website RIE20-2D;411MARRIOTT RIE20-2D
+P09-RIE20-2D;;RIE20-2D;411AIRBNB RIE20-2D;411BOOKING RIE20-2D;411VRBO RIE20-2D;411PLUMGUIDE RIE20-2D;;411Website RIE20-2D;411MARRIOTT RIE20-2D
+P16-KLE40-2D;Luxury 6 Bedroom & 5 Bathroom - Champs Elysees;KLE40-2D;411AIRBNB KLE40-2D;411BOOKING KLE40-2D;411VRBO KLE40-2D;411PLUMGUIDE KLE40-2D;Merveil - Signature Suite - Champs Elysees -Kleber;411Website KLE40-2D;411MARRIOTT KLE40-2D
+P05-BOU40-0G;Luxury 2 Bedroom & 2 Bathroom - Notre Dame;BOU40-0G;411AIRBNB BOU40-0G;411BOOKING BOU40-0G;411VRBO BOU40-0G;411PLUMGUIDE BOU40-0G;Merveil - Luxury Suite - Notre Dame - Boulangers;411Website BOU40-0G;411MARRIOTT BOU40-0G
+P02-PAL7-1D;Luxury 4 Bedroom 3 Bathroom - Louvre & Marais;PAL7-1D;411AIRBNB PAL7-1D;411BOOKING PAL7-1D;411VRBO PAL7-1D;411PLUMGUIDE PAL7-1D;Merveil - Luxury Suite - Louvre - Palestro;411Website PAL7-1D;411MARRIOTT PAL7-1D
+P02-CAI12-3D;;CAI12-3D;411AIRBNB CAI12-3D;411BOOKING CAI12-3D;411VRBO CAI12-3D;411PLUMGUIDE CAI12-3D;;411Website CAI12-3D;411MARRIOTT CAI12-3D
+P08-HOC16-7G;Luxury 7Br Champs-Elysees Eiffel Tower view;HOC16-7G;411AIRBNB HOC16-7G;411BOOKING HOC16-7G;411VRBO HOC16-7G;411PLUMGUIDE HOC16-7G;Merveil Signature Suite Hoche - Eiffel Tower view;411Website HOC16-7G;411MARRIOTT HOC16-7G
+P09-BAT14-1F;L'appartement n'est pas lancé;BAT14-1F;411AIRBNB BAT14-1F;411BOOKING BAT14-1F;411VRBO BAT14-1F;411PLUMGUIDE BAT14-1F;Merveil - Signature Suite - Opera - Bateliere;411Website BAT14-1F;411MARRIOTT BAT14-1F
+P07-GRE168-0G;Luxury 5 Bedroom & 5 Bathroom Suite - Eiffel Tower;GRE168-0G;411AIRBNB GRE168-0G;411BOOKING GRE168-0G;411VRBO GRE168-0G;411PLUMGUIDE GRE168-0G;Merveil - Signature Suite -Tour Eiffel- Grenelle I;411Website GRE168-0G;411MARRIOTT GRE168-0G
+P07-GRE168-0D;Luxury 3 Bedroom & 2 Bathroom Suite - Eiffel Tower;GRE168-0D;411AIRBNB GRE168-0D;411BOOKING GRE168-0D;411VRBO GRE168-0D;411PLUMGUIDE GRE168-0D;Merveil - Signature Suite -Tour Eiffel- Grenelle II;411Website GRE168-0D;411MARRIOTT GRE168-0D
+P08-MRI16-0D;Luxury 2 Bedroom & 2 Bathroom Suite-Champs-Elysees;MRI16-0D;411AIRBNB MRI16-0D;411BOOKING MRI16-0D;411VRBO MRI16-0D;411PLUMGUIDE MRI16-0D;Merveil - Signature Suite-Champs Elysees- Marignan;411Website MRI16-0D;411MARRIOTT MRI16-0D
+P02-BRS1-5F;L'appartement n'est pas lancé;BRS1-5F;411AIRBNB BRS1-5F;411BOOKING BRS1-5F;411VRBO BRS1-5F;411PLUMGUIDE BRS1-5F;Merveil - Luxury Suite - Louvre - Bourse I;411Website BRS1-5F;411MARRIOTT BRS1-5F
+P03-TBG52-1G;Luxury 3 Bedroom & 3 Bathroom apartment Le Marais;TBG52-1G;411AIRBNB TBG52-1G;411BOOKING TBG52-1G;411VRBO TBG52-1G;411PLUMGUIDE TBG52-1G;Merveil - Luxury Suite - Marais - Turbigo II;411Website TBG52-1G;411MARRIOTT TBG52-1G
+P03-TBG52-1D;Luxury 2 Bedroom & 2 Bathroom apartment Le Marais;TBG52-1D;411AIRBNB TBG52-1D;411BOOKING TBG52-1D;411VRBO TBG52-1D;411PLUMGUIDE TBG52-1D;Merveil - Signature Suite - Marais -Turbigo III;411Website TBG52-1D;411MARRIOTT TBG52-1D
+P02-CAI31-3D;Luxury 5 bedroom design apartment - Louvre Marais;CAI31-3D;411AIRBNB CAI31-3D;411BOOKING CAI31-3D;411VRBO CAI31-3D;411PLUMGUIDE CAI31-3D;Merveil - Signature Suite - Marais - Caire II;411Website CAI31-3D;411MARRIOTT CAI31-3D
+P06-VAU114-0G;;VAU114-0G;411AIRBNB VAU114-0G;411BOOKING VAU114-0G;411VRBO VAU114-0G;411PLUMGUIDE VAU114-0G;;411Website VAU114-0G;411MARRIOTT VAU114-0G
+P09-ROU14-4G;Luxury 4 Bedroom & 4.5 Bathroom Apartment - Louvre;ROU14-4G;411AIRBNB ROU14-4G;411BOOKING ROU14-4G;411VRBO ROU14-4G;411PLUMGUIDE ROU14-4G;Merveil - Signature Suite - Opera - Rougemont III;411Website ROU14-4G;411MARRIOTT ROU14-4G
+P17-GOU71-3D;Merveil - Signature Suite-Champs Elysees-St Cyr II;GOU71-3D;411AIRBNB GOU71-3D;411BOOKING GOU71-3D;411VRBO GOU71-3D;411PLUMGUIDE GOU71-3D;Merveil Signature Suite - Cyr II - Private terrace;411Website GOU71-3D;411MARRIOTT GOU71-3D
+P03-ARC77-2G;Luxury 6 Bedroom & 6 Bathroom apartment - Marais;ARC77-2G;411AIRBNB ARC77-2G;411BOOKING ARC77-2G;411VRBO ARC77-2G;411PLUMGUIDE ARC77-2G;Merveil - Signature Suite - Marais - Archives II;411Website ARC77-2G;411MARRIOTT ARC77-2G
+P17-GOU71-2D;Merveil - Suite de luxe - ChampsElysées - Gouvion I;GOU71-2D;411AIRBNB GOU71-2D;411BOOKING GOU71-2D;411VRBO GOU71-2D;411PLUMGUIDE GOU71-2D;Merveil - Luxury Suite - Champs Elysees - St Cyr I;411Website GOU71-2D;411MARRIOTT GOU71-2D
+P15-VIA1-2G;L'appartement n'est pas lancé;VIA1-2G;411AIRBNB VIA1-2G;411BOOKING VIA1-2G;411VRBO VIA1-2G;411PLUMGUIDE VIA1-2G;Merveil - Signature Suite - Eiffel Tower terrace;411Website VIA1-2G;411MARRIOTT VIA1-2G
+P03-TUR64-1D;L'appartement n'est pas lancé;TUR64-1D;411AIRBNB TUR64-1D;411BOOKING TUR64-1D;411VRBO TUR64-1D;411PLUMGUIDE TUR64-1D;Merveil - Luxury Suite - Marais - Turenne;411Website TUR64-1D;411MARRIOTT TUR64-1D
+P15-VIA29-1D;L'appartement n'est pas lancé;VIA29-1D;411AIRBNB VIA29-1D;411BOOKING VIA29-1D;411VRBO VIA29-1D;411PLUMGUIDE VIA29-1D;Merveil - Signature Suite - Tour Eiffel - Viala IV;411Website VIA29-1D;411MARRIOTT VIA29-1D
+P03-BRA4-2G;L'appartement n'est pas lancé;BRA4-2G;411AIRBNB BRA4-2G;411BOOKING BRA4-2G;411VRBO BRA4-2G;411PLUMGUIDE BRA4-2G;Merveil - Signature Suite - Marais - Braque;411Website BRA4-2G;411MARRIOTT BRA4-2G
+N92-DUL16-1F;L'appartement n'est pas lancé;DUL16-1F;411AIRBNB DUL16-1F;411BOOKING DUL16-1F;411VRBO DUL16-1F;411PLUMGUIDE DUL16-1F;Merveil - Signature Suite - Champs Elysees-Dulud I;411Website DUL16-1F;411MARRIOTT DUL16-1F
+N92-DUL16-2F;L'appartement n'est pas lancé;DUL16-2F;411AIRBNB DUL16-2F;411BOOKING DUL16-2F;411VRBO DUL16-2F;411PLUMGUIDE DUL16-2F;;411Website DUL16-2F;411MARRIOTT DUL16-2F
+N92-DUL16-3F;L'appartement n'est pas lancé;DUL16-3F;411AIRBNB DUL16-3F;411BOOKING DUL16-3F;411VRBO DUL16-3F;411PLUMGUIDE DUL16-3F;;411Website DUL16-3F;411MARRIOTT DUL16-3F
+P15-DES3-5G;L'appartement n'est pas lancé;DES3-5G;411AIRBNB DES3-5G;411BOOKING DES3-5G;411VRBO DES3-5G;411PLUMGUIDE DES3-5G;Merveil - Signature Suite - Tour Eiffel - Desaix I;411Website DES3-5G;411MARRIOTT DES3-5G
+P15-DES3-5F;L'appartement n'est pas lancé;DES3-5F;411AIRBNB DES3-5F;411BOOKING DES3-5F;411VRBO DES3-5F;411PLUMGUIDE DES3-5F;Merveil - Signature Suite - Tour Eiffel -Desaix II;411Website DES3-5F;411MARRIOTT DES3-5F
+P17-ALF6-4F;L'appartement n'est pas lancé;ALF6-4F;411AIRBNB ALF6-4F;411BOOKING ALF6-4F;411VRBO ALF6-4F;411PLUMGUIDE ALF6-4F;Merveil - Signature Suite - Champs Elysees - Alfred;411Website ALF6-4F;411MARRIOTT ALF6-4F
+P08-ROY21-5G;;ROY21-5G;411AIRBNB ROY21-5G;411BOOKING ROY21-5G;411VRBO ROY21-5G;411PLUMGUIDE ROY21-5G;;411Website ROY21-5G;411MARRIOTT ROY21-5G
