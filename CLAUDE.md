@@ -136,6 +136,10 @@ Recommandation initiale : Option A (le plus event-driven et stable côté GCP), 
 Pour redéployer : `gcloud run deploy booking-pipeline --source . --region=europe-west1 --project=merveil-data-warehouse --quiet`
 Toujours commiter/pusher le mapping avant de déployer.
 
+## Backlog — Tests
+- **`tests/test_accounting.py` — 8 tests obsolètes** : ces tests datent d'avant la refacto du 13/04/2026 (`feat: Libellés frais Booking par réservation`) qui a éclaté le DEBIT 401BOOKING en une ligne par réservation au lieu d'une ligne agrégée par batch. Les assertions codent en dur l'ancienne structure (`entries[1].account == "401BOOKING"`, `len(entries) == 4` pour 1 résa, etc.). À mettre à jour pour refléter la structure actuelle (1 header 51105000 + 2 lignes par résa avec `per_reservation_fees=True`). 7 tests passent encore.
+- **Tests manquants sur l'orchestrator + Sources** : pas de tests unitaires sur `orchestrator.run_pipeline()` ni sur les classes `BookingDriveSource` / `AirbnbDriveSource`. À écrire en même temps que la mise à jour de `test_accounting.py`.
+
 ## Known issues / notes
 - SA must have **Organizer** role on the Shared Drive to move files uploaded by others
 - `list_excel_files()` in `drive/client.py` also returns Google Sheets natively converted → filter by extension handled at download time

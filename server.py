@@ -1,26 +1,27 @@
 """
-Flask HTTP server for Google Cloud Run.
+Flask HTTP server pour Google Cloud Run.
 
-Triggered via HTTP POST (Cloud Scheduler or any HTTP client).
+Routes :
+  - `GET /health` : ping
+  - `POST /process` : déclenche un run pour l'OTA donné
 
-Expected request body (JSON):
+Body attendu (POST /process) :
     {
-        "folder_id": "1abc...xyz",   // Google Drive folder containing the source files
-        "date":      "2025-10-03",   // Processing date (YYYY-MM-DD) or "AUTO"
-        "ota":       "booking"       // "booking" or "airbnb"
+        "folder_id": "1abc...xyz",    // Drive folder (default = config par OTA)
+        "date":      "2026-05-11",    // YYYY-MM-DD ou "AUTO"
+        "ota":       "booking",       // "booking" ou "airbnb"
+        "dry_run":   false,           // optionnel
+        "test":      false,           // optionnel (préfixe [TEST])
+        "bq_only":   false,           // optionnel (skip PennyLane)
+        "run_id":    "uuid"           // optionnel (auto-généré)
     }
 
-On success it returns:
-    {
-        "status": "ok",
-        "reservations": 83,
-        "warnings": 8,
-        "blocking": 0,
-        "balance_ok": true,
-        "pennylane_entry_id": 12345       // booking — unique PennyLane entry id
-        // OR
-        "pennylane_batches_posted": 40    // airbnb — number of payout batches posted
-    }
+Le serveur ne fait que :
+  1. Parser le body
+  2. Instancier la bonne Source
+  3. Déléguer à `orchestrator.run_pipeline()`
+
+Toute la logique métier est dans `orchestrator.py` + `sources/*.py`.
 """
 
 import logging
@@ -35,29 +36,10 @@ from flask import Flask, jsonify, request
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config.mapping_loader import load_mapping, load_airbnb_mapping
-from config.settings import (
-    DRIVE_FOLDER_BOOKING,
-    DRIVE_FOLDER_AIRBNB,
-    AIRBNB_JOURNAL_CODE,
-    AIRBNB_ACCOUNT_BANK,
-    AIRBNB_ACCOUNT_CLIENT,
-    AIRBNB_ACCOUNT_SUPPLIER,
-    AIRBNB_ACCOUNT_CANCELLATION_FEE,
-)
-from parsers.booking import BookingExcelParser
-from parsers.airbnb import AirbnbParser
-from accounting.entries import generate_entries
+from config.settings import DRIVE_FOLDER_BOOKING, DRIVE_FOLDER_AIRBNB
 from drive.client import DriveClient
-from pennylane.client import PennyLaneClient
-from bigquery.postings import write_postings, build_synthetic_results
-from lookups.mews import lookup_bills
-from validators.anomalies import (
-    Severity,
-    check_balance,
-    check_duplicate_reservations,
-    validate_reservation_amounts,
-)
+from orchestrator import run_pipeline
+from sources import AirbnbDriveSource, BookingDriveSource
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,19 +53,23 @@ app = Flask(__name__)
 _BOOKING_MAPPING_PATH = Path(__file__).parent / "config" / "mapping" / "CodeAppart_Compta.csv"
 _AIRBNB_MAPPING_PATH  = Path(__file__).parent / "config" / "mapping" / "AirbnbLogement_Compta.csv"
 
+# Registry Source : ajouter une entrée ici quand on ajoute une nouvelle Source.
+# Chaque factory prend (drive_client, folder_id, tmp_dir) et retourne une Source.
+_SOURCE_FACTORIES = {
+    "booking": lambda drive, folder_id, tmp: BookingDriveSource(drive, folder_id, _BOOKING_MAPPING_PATH, tmp),
+    "airbnb":  lambda drive, folder_id, tmp: AirbnbDriveSource(drive, folder_id, _AIRBNB_MAPPING_PATH, tmp),
+}
 
-# ---------------------------------------------------------------------------
-# Health check
-# ---------------------------------------------------------------------------
+_DEFAULT_FOLDERS = {
+    "booking": DRIVE_FOLDER_BOOKING,
+    "airbnb":  DRIVE_FOLDER_AIRBNB,
+}
+
 
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
 
-
-# ---------------------------------------------------------------------------
-# Pipeline endpoint
-# ---------------------------------------------------------------------------
 
 @app.route("/process", methods=["POST"])
 def process():
@@ -95,11 +81,11 @@ def process():
     date_str  = body.get("date")
     run_id    = body.get("run_id") or str(uuid.uuid4())
 
-    if ota not in ("booking", "airbnb"):
-        return jsonify({"error": f"Unsupported OTA '{ota}'. Use 'booking' or 'airbnb'."}), 400
+    if ota not in _SOURCE_FACTORIES:
+        supported = ", ".join(_SOURCE_FACTORIES.keys())
+        return jsonify({"error": f"Unsupported OTA '{ota}'. Supported: {supported}."}), 400
 
-    default_folder = DRIVE_FOLDER_BOOKING if ota == "booking" else DRIVE_FOLDER_AIRBNB
-    folder_id = body.get("folder_id") or default_folder
+    folder_id = body.get("folder_id") or _DEFAULT_FOLDERS[ota]
 
     if not date_str or date_str == "AUTO":
         import zoneinfo
@@ -116,10 +102,18 @@ def process():
     )
 
     try:
-        if ota == "booking":
-            result = _run_booking_pipeline(folder_id, processing_date, date_str, test_mode, dry_run, bq_only, run_id)
-        else:
-            result = _run_airbnb_pipeline(folder_id, processing_date, date_str, test_mode, dry_run, bq_only, run_id)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            drive = DriveClient()
+            source = _SOURCE_FACTORIES[ota](drive, folder_id, Path(tmpdir))
+            result = run_pipeline(
+                source=source,
+                processing_date=processing_date,
+                drive_client=drive,
+                test_mode=test_mode,
+                dry_run=dry_run,
+                bq_only=bq_only,
+                run_id=run_id,
+            )
     except Exception as exc:
         logger.exception("Pipeline failed: %s", exc)
         return jsonify({"error": str(exc), "run_id": run_id}), 500
@@ -127,394 +121,6 @@ def process():
     result["run_id"] = run_id
     return jsonify(result), 200
 
-
-# ---------------------------------------------------------------------------
-# Booking pipeline
-# ---------------------------------------------------------------------------
-
-def _run_booking_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False, dry_run: bool = False, bq_only: bool = False, run_id: str = "") -> dict:
-    drive = DriveClient()
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp = Path(tmpdir)
-
-        # Step 1: download the Booking .xlsx from Drive (exactly 1 file expected)
-        xlsx_files = drive.list_excel_files(folder_id)
-        if not xlsx_files:
-            return {"status": "skipped", "reason": "No .xlsx file found in the Drive folder."}
-        if len(xlsx_files) > 1:
-            names = ", ".join(f["name"] for f in xlsx_files)
-            return {
-                "status": "error",
-                "reason": f"{len(xlsx_files)} fichiers xlsx trouvés ({names}) — déposez un seul fichier à la fois.",
-            }
-
-        xlsx_meta = xlsx_files[0]
-        xlsx_file_id = xlsx_meta["id"]
-        local_name = xlsx_meta["name"] if xlsx_meta["name"].endswith(".xlsx") else xlsx_meta["name"] + ".xlsx"
-        local_xlsx = tmp / local_name
-        drive.download_file(xlsx_meta["id"], local_xlsx, mime_type=xlsx_meta.get("mimeType"))
-        logger.info("Downloaded Booking file: %s (type: %s)", xlsx_meta["name"], xlsx_meta.get("mimeType"))
-
-        # Step 2: load mapping
-        mapping = load_mapping(_BOOKING_MAPPING_PATH)
-
-        # Step 3: parse into payout batches
-        parser = BookingExcelParser()
-        batches, anomalies = parser.parse_into_batches(local_xlsx)
-        all_reservations = [r for b in batches for r in b.reservations]
-        anomalies.extend(check_duplicate_reservations(all_reservations))
-
-        if not batches:
-            return {"status": "skipped", "reason": "No payout batches found in the Booking file."}
-
-        # Step 3.5: BQ lookup (ota_ref, gross) → Mews bill (chantier 2).
-        # Le gross sert au matching par proximite (= evite les bills annexes).
-        # gross_excl_city_tax = ce qui sera credit sur le 411 cote PennyLane.
-        all_targets = [
-            (r.reference_number, float(r.amount + r.city_tax))  # city_tax negatif
-            for b in batches for r in b.reservations
-        ]
-        try:
-            bill_lookup = lookup_bills(all_targets)
-        except Exception as exc:
-            logger.warning("Bill lookup failed (non-fatal): %s", exc)
-            bill_lookup = {}
-
-        # Step 4: generate entries per batch
-        per_batch_entries = []
-        all_processed = []
-        for batch in batches:
-            batch_entries, batch_processed, entry_anomalies = generate_entries(
-                batch.reservations, processing_date, mapping,
-                per_reservation_fees=True,
-                bill_lookup=bill_lookup,
-            )
-            anomalies.extend(entry_anomalies)
-            per_batch_entries.append(batch_entries)
-            all_processed.extend(batch_processed)
-
-        # Step 5: per-reservation validation
-        for r in all_processed:
-            anomalies.extend(validate_reservation_amounts(r))
-
-        # Step 6: global balance check
-        balance_ok, anomalies = _check_global_balance(all_processed, anomalies)
-
-        blocking = [a for a in anomalies if a.severity == Severity.BLOCKING]
-        warnings = [a for a in anomalies if a.severity == Severity.WARNING]
-
-        if blocking:
-            file_date = max(b.payout_date for b in batches).strftime("%Y-%m-%d")
-            logger.error("%d blocking anomaly/ies — PennyLane NOT posted.", len(blocking))
-            if not dry_run and not test_mode:
-                _archive_run(drive, folder_id, file_date, [xlsx_file_id], anomalies, "booking")
-            return {
-                "status":           "blocked",
-                "reservations":     len(all_processed),
-                "blocking":         len(blocking),
-                "warnings":         len(warnings),
-                "balance_ok":       balance_ok,
-                "blocking_details": [a.message for a in blocking],
-            }
-
-        # Step 7: post each payout batch to PennyLane (skipped in dry_run / bq_only)
-        if dry_run:
-            total_entries = sum(len(b) for b in per_batch_entries)
-            logger.info("dry_run=True — PennyLane NOT posted. %d batches / %d entries ready.", len(per_batch_entries), total_entries)
-            return {
-                "status":       "dry_run",
-                "reservations": len(all_processed),
-                "warnings":     len(warnings),
-                "blocking":     0,
-                "balance_ok":   balance_ok,
-                "batches":      len(per_batch_entries),
-                "entries":      total_entries,
-            }
-        if test_mode:
-            for batch in per_batch_entries:
-                if batch:
-                    batch[0].label = "[TEST] " + batch[0].label
-
-        if bq_only:
-            pl_results = build_synthetic_results(per_batch_entries)
-            logger.info("bq_only=True — PennyLane skipped, writing trace to BQ only.")
-        else:
-            pl_results = _get_pennylane_client().post_batches(per_batch_entries)
-            logger.info(
-                "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
-                len(all_processed), len(warnings), balance_ok, len(pl_results),
-            )
-
-        bq_rows_written = 0
-        try:
-            bq_rows_written = write_postings(
-                run_id=run_id,
-                ota="booking",
-                source_file=xlsx_meta["name"],
-                per_batch_entries=per_batch_entries,
-                pl_results=pl_results,
-                test_mode=test_mode,
-                bq_only=bq_only,
-            )
-        except Exception as exc:
-            logger.exception("BQ trace write failed (non-fatal): %s", exc)
-
-        file_date = max(b.payout_date for b in batches).strftime("%Y-%m-%d")
-        if bq_only:
-            file_date = f"{file_date} [BQ-ONLY]"
-        _archive_run(drive, folder_id, file_date, [xlsx_file_id], warnings, "booking")
-        return {
-            "status":                   "ok",
-            "reservations":             len(all_processed),
-            "warnings":                 len(warnings),
-            "blocking":                 0,
-            "balance_ok":               balance_ok,
-            "pennylane_batches_posted": 0 if bq_only else len(pl_results),
-            "bq_rows_written":          bq_rows_written,
-            "bq_only":                  bq_only,
-        }
-
-
-# ---------------------------------------------------------------------------
-# Airbnb pipeline
-# ---------------------------------------------------------------------------
-
-def _run_airbnb_pipeline(folder_id: str, processing_date, date_str: str, test_mode: bool = False, dry_run: bool = False, bq_only: bool = False, run_id: str = "") -> dict:
-    drive = DriveClient()
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp = Path(tmpdir)
-
-        # Step 1: download the Airbnb .xlsx from Drive (exactly 1 file expected in root)
-        xlsx_files = drive.list_excel_files(folder_id)
-        if not xlsx_files:
-            return {"status": "skipped", "reason": "No .xlsx file found in the Drive folder."}
-        if len(xlsx_files) > 1:
-            names = ", ".join(f["name"] for f in xlsx_files)
-            return {
-                "status": "error",
-                "reason": f"{len(xlsx_files)} fichiers xlsx trouvés dans le dossier ({names}) — déposez un seul fichier à la fois.",
-            }
-
-        xlsx_meta = xlsx_files[0]
-        xlsx_file_id = xlsx_meta["id"]
-        local_name = xlsx_meta["name"] if xlsx_meta["name"].endswith(".xlsx") else xlsx_meta["name"] + ".xlsx"
-        local_xlsx = tmp / local_name
-        drive.download_file(xlsx_meta["id"], local_xlsx, mime_type=xlsx_meta.get("mimeType"))
-        logger.info("Downloaded Airbnb file: %s (type: %s)", xlsx_meta["name"], xlsx_meta.get("mimeType"))
-
-        # Step 2: load Airbnb mapping
-        mapping = load_airbnb_mapping(_AIRBNB_MAPPING_PATH)
-
-        # Step 3: parse into payout batches
-        parser = AirbnbParser()
-        batches, anomalies = parser.parse_into_batches(local_xlsx)
-
-        # Enrich NON_EUR anomalies with code_comptable + PennyLane label
-        for a in anomalies:
-            if a.type == "NON_EUR_CURRENCY":
-                logement = a.details.get("logement", "")
-                code = mapping.get(logement, logement)
-                checkout = a.details.get("checkout_date", "")
-                voyageur = a.details.get("voyageur", "")
-                row_type = a.details.get("row_type", "")
-                ref = a.reservation_ref or ""
-                a.details["code_comptable"] = code
-                a.details["label_pennylane"] = (
-                    f"{code} - AIRBNB - CO : {checkout} - {voyageur} - {row_type} - {ref}"
-                )
-
-        if not batches:
-            return {"status": "skipped", "reason": "No payout batches found in the Airbnb file."}
-
-        # Step 3.5: BQ lookup (ota_ref, gross) → Mews bill (chantier 2).
-        all_targets = [
-            (r.reference_number, float(r.amount + r.city_tax))
-            for b in batches for r in b.reservations
-        ]
-        try:
-            bill_lookup = lookup_bills(all_targets)
-        except Exception as exc:
-            logger.warning("Bill lookup failed (non-fatal): %s", exc)
-            bill_lookup = {}
-
-        # Step 4: generate entries per batch (keep per-batch for PennyLane posting)
-        per_batch_entries = []
-        all_processed = []
-        for batch in batches:
-            batch_entries, batch_processed, entry_anomalies = generate_entries(
-                batch.reservations,
-                processing_date,
-                mapping,
-                journal_code=AIRBNB_JOURNAL_CODE,
-                account_bank=AIRBNB_ACCOUNT_BANK,
-                account_client=AIRBNB_ACCOUNT_CLIENT,
-                account_supplier=AIRBNB_ACCOUNT_SUPPLIER,
-                account_cancellation_fee=AIRBNB_ACCOUNT_CANCELLATION_FEE,
-                ota_label="AIRBNB",
-                bill_lookup=bill_lookup,
-            )
-            anomalies.extend(entry_anomalies)
-            per_batch_entries.append(batch_entries)
-            all_processed.extend(batch_processed)
-
-        # Step 5: per-reservation validation
-        for r in all_processed:
-            anomalies.extend(validate_reservation_amounts(r))
-
-        # Step 6: global balance check
-        balance_ok, anomalies = _check_global_balance(all_processed, anomalies)
-
-        blocking = [a for a in anomalies if a.severity == Severity.BLOCKING]
-        warnings = [a for a in anomalies if a.severity == Severity.WARNING]
-
-        file_date = max(b.payout_date for b in batches).strftime("%Y-%m-%d")
-        if blocking:
-            logger.error("%d blocking anomaly/ies — PennyLane NOT posted.", len(blocking))
-            if not dry_run and not test_mode:
-                _archive_run(drive, folder_id, file_date, [xlsx_file_id], anomalies, "airbnb")
-            return {
-                "status":           "blocked",
-                "reservations":     len(all_processed),
-                "blocking":         len(blocking),
-                "warnings":         len(warnings),
-                "balance_ok":       balance_ok,
-                "blocking_details": [a.message for a in blocking],
-            }
-
-        # Step 7: post each payout batch to PennyLane (skipped in dry_run / bq_only)
-        if dry_run:
-            total_entries = sum(len(b) for b in per_batch_entries)
-            logger.info("dry_run=True — PennyLane NOT posted. %d batches / %d entries ready.", len(per_batch_entries), total_entries)
-            return {
-                "status":       "dry_run",
-                "reservations": len(all_processed),
-                "warnings":     len(warnings),
-                "blocking":     0,
-                "balance_ok":   balance_ok,
-                "batches":      len(per_batch_entries),
-                "entries":      total_entries,
-            }
-        if test_mode:
-            for batch in per_batch_entries:
-                if batch:
-                    batch[0].label = "[TEST] " + batch[0].label
-
-        if bq_only:
-            pl_results = build_synthetic_results(per_batch_entries)
-            logger.info("bq_only=True — PennyLane skipped, writing trace to BQ only.")
-        else:
-            pl_results = _get_pennylane_client().post_batches(per_batch_entries)
-            logger.info(
-                "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
-                len(all_processed), len(warnings), balance_ok, len(pl_results),
-            )
-
-        bq_rows_written = 0
-        try:
-            bq_rows_written = write_postings(
-                run_id=run_id,
-                ota="airbnb",
-                source_file=xlsx_meta["name"],
-                per_batch_entries=per_batch_entries,
-                pl_results=pl_results,
-                test_mode=test_mode,
-                bq_only=bq_only,
-            )
-        except Exception as exc:
-            logger.exception("BQ trace write failed (non-fatal): %s", exc)
-
-        archive_date = f"{file_date} [BQ-ONLY]" if bq_only else file_date
-        _archive_run(drive, folder_id, archive_date, [xlsx_file_id], warnings, "airbnb")
-        return {
-            "status":                   "ok",
-            "reservations":             len(all_processed),
-            "warnings":                 len(warnings),
-            "blocking":                 0,
-            "balance_ok":               balance_ok,
-            "pennylane_batches_posted": 0 if bq_only else len(pl_results),
-            "bq_rows_written":          bq_rows_written,
-            "bq_only":                  bq_only,
-        }
-
-
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
-
-def _archive_run(drive, folder_id: str, date_str: str, file_ids: list, anomalies: list, ota: str) -> None:
-    """Create Archive subfolder, move source files into it, create anomaly sheet if needed."""
-    try:
-        archive_id = drive.get_or_create_folder(folder_id, f"Archive {date_str}")
-    except Exception as exc:
-        logger.warning("Could not create archive folder: %s", exc)
-        return
-    for fid in file_ids:
-        try:
-            drive.move_file(fid, archive_id, folder_id)
-        except Exception as exc:
-            logger.warning("Could not move file %s to archive: %s", fid, exc)
-    if anomalies:
-        _post_anomaly_sheet(drive, archive_id, anomalies, ota)
-
-
-def _post_anomaly_sheet(drive, folder_id: str, anomalies: list, ota: str) -> None:
-    """Create/replace an anomaly Google Sheet in *folder_id*."""
-    header = [
-        "Sévérité", "Type", "Référence réservation",
-        "Libellé PennyLane", "Montant", "Devise",
-        "Message", "Fichier source",
-    ]
-    rows = [header] + [
-        [
-            a.severity,
-            a.type,
-            a.reservation_ref or "",
-            a.details.get("label_pennylane", ""),
-            a.details.get("montant", ""),
-            a.details.get("currency", ""),
-            a.message,
-            a.source_file,
-        ]
-        for a in anomalies
-    ]
-    sheet_name = f"Anomalies {ota.upper()}"
-    try:
-        drive.create_anomaly_sheet(folder_id, sheet_name, rows)
-        logger.info("Anomaly sheet created: '%s' (%d row(s))", sheet_name, len(rows) - 1)
-    except Exception as exc:
-        logger.warning("Could not create anomaly sheet: %s", exc)
-
-
-def _get_pennylane_client() -> PennyLaneClient:
-    token = os.environ.get("PENNYLANE_TOKEN")
-    if not token:
-        raise ValueError("PENNYLANE_TOKEN environment variable not set.")
-    return PennyLaneClient(token=token)
-
-
-def _check_global_balance(processed, anomalies):
-    """Run the global balance check and return (balance_ok, updated_anomalies)."""
-    if not processed:
-        return True, anomalies
-    total_net            = sum(r.net            for r in processed)
-    total_amount         = sum(r.amount         for r in processed)
-    total_commission     = sum(r.commission     for r in processed)
-    total_payment_charge = sum(r.payment_charge for r in processed)
-    total_city_tax       = sum(r.city_tax       for r in processed)
-    balance_anomaly = check_balance(
-        total_net, total_amount, total_commission,
-        total_payment_charge, total_city_tax,
-    )
-    if balance_anomaly:
-        anomalies.append(balance_anomaly)
-    return balance_anomaly is None, anomalies
-
-
-# ---------------------------------------------------------------------------
-# Entry point (local dev / Cloud Run)
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
