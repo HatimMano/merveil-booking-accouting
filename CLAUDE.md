@@ -144,13 +144,21 @@ See `config/settings.py` for full mapping. Key codes:
 ```
 
 ## Cloud Scheduler jobs
-Deux jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
-| Job | Schedule | OTA |
+Trois jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
+| Job | Schedule | Cible |
 |---|---|---|
-| `airbnb-pipeline-daily` | Tous les jours à 8h Paris | Airbnb |
-| `booking-pipeline-weekly` | Tous les lundis à 8h Paris | Booking |
+| `airbnb-pipeline-daily` | (en pause) | Cloud Run service `booking-pipeline` /process (Airbnb) |
+| `booking-pipeline-weekly` | (en pause) | Cloud Run service `booking-pipeline` /process (Booking) |
+| `lettering-sim-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `lettering-sim` (simulation lettrage Airbnb+Booking sur 60j) |
 
-Les deux jobs sont **en PAUSE permanent** (décision 2026-05-11). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt). Workflow manuel actuel :
+Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt).
+
+### Cloud Run Job `lettering-sim`
+- **Image** : partagée avec service `booking-pipeline` (entrypoint override `python -m pennylane.lettering_sim 60`)
+- **Trigger** : `lettering-sim-daily` à 6h Paris (après dbt 6h + intégration native Mews J+3)
+- **Endpoint manual** : `gcloud run jobs execute lettering-sim --region=europe-west1`
+- **Sortie** : `pennylane.lettering_simulation` (BQ append-only, 1 row par ligne 411 inspectée)
+- **Conso côté dash** : `dashboard_finance.dash_finance_lettering_sim` → tab 9.5 Simulation lettrage Workflow manuel actuel :
 1. Déposer le fichier xlsx dans le bon dossier Drive
 2. `gcloud scheduler jobs resume <job> --location=europe-west1`
 3. `gcloud scheduler jobs run <job> --location=europe-west1`
