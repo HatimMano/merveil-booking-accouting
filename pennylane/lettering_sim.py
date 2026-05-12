@@ -102,9 +102,10 @@ class PennyLaneReader:
         for _ in range(max_pages):
             if cursor:
                 p["cursor"] = cursor
-            r = self._sess.get(f"{PENNYLANE_BASE}/{endpoint}", params=p)
-            r.raise_for_status()
-            d = r.json()
+            d = self._get_with_retry_params(
+                f"{PENNYLANE_BASE}/{endpoint}",
+                params=p,
+            )
             for item in d.get("items", []):
                 yield item
             if not d.get("has_more"):
@@ -112,6 +113,20 @@ class PennyLaneReader:
             cursor = d.get("next_cursor")
             if not cursor:
                 return
+
+    def _get_with_retry_params(self, url: str, params: dict, max_retries: int = 6) -> dict:
+        """Same as _get_with_retry mais avec query params."""
+        delay = 2.0
+        for attempt in range(max_retries):
+            r = self._sess.get(url, params=params)
+            if r.status_code == 429:
+                logger.info("429 paginate, sleep %.1fs (attempt %d/%d)", delay, attempt + 1, max_retries)
+                time.sleep(delay)
+                delay *= 2
+                continue
+            r.raise_for_status()
+            return r.json()
+        raise requests.HTTPError(f"429 rate limit after {max_retries} retries on {url}")
 
     def _get_with_retry(self, url: str, max_retries: int = 5) -> dict:
         """GET avec backoff exponentiel sur 429 (rate limit)."""
