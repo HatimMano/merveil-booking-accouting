@@ -42,6 +42,53 @@ TARGET_ACCOUNTS = ("411AIRBNB", "411BOOKING")
 # Ex : MAR135-2F, GOU71-3D, HAU152-0G, ABO108-2G
 APT_CODE_RE = re.compile(r"\b([A-Z]{3}\d{1,3}[A-Z]?-\d{1,2}[A-Z])\b")
 
+# V1 : extraction checkout_date depuis les labels (cf. exemples ci-dessous).
+# - Côté DEBIT (vente Mews) : "25/04/2026-30/04/2026" → checkout = 2e date
+# - Côté CREDIT (encaissement) :
+#     - Airbnb : "CO :Apr 30, 2026"  (anglais, mois 3 lettres)
+#     - Booking : "CO :30 avr. 2026" (français, jour mois année)
+_MONTHS = {
+    "jan": 1, "janv": 1, "feb": 2, "févr": 2, "fev": 2,
+    "mar": 3, "mars": 3, "apr": 4, "avr": 4,
+    "may": 5, "mai": 5, "jun": 6, "juin": 6,
+    "jul": 7, "juil": 7, "aug": 8, "août": 8, "aou": 8,
+    "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12, "déc": 12,
+}
+_DEBIT_RANGE_RE = re.compile(r"\d{1,2}/\d{1,2}/(\d{4})\s*-\s*(\d{1,2})/(\d{1,2})/(\d{4})")
+_CREDIT_EN_RE   = re.compile(r"CO\s*:\s*([A-Za-z]{3,5})\.?\s+(\d{1,2}),\s*(\d{4})")
+_CREDIT_FR_RE   = re.compile(r"CO\s*:\s*(\d{1,2})\s+([a-zA-Zéèûôîâ]{3,5})\.?\s+(\d{4})")
+
+
+def _month_num(name: str) -> int | None:
+    return _MONTHS.get(name.lower().rstrip(".")[:4]) or _MONTHS.get(name.lower().rstrip(".")[:3])
+
+
+def extract_checkout_date(label_line: str, label_entry: str, side: str) -> str | None:
+    """Renvoie la date de checkout au format 'YYYY-MM-DD' depuis les labels.
+    Stratégie distincte selon le côté (vente vs encaissement)."""
+    if side == "DEBIT":
+        # Cherche d'abord dans le label de ligne, sinon dans le label entry
+        for src in (label_line or "", label_entry or ""):
+            m = _DEBIT_RANGE_RE.search(src)
+            if m:
+                return f"{m.group(4)}-{m.group(3).zfill(2)}-{m.group(2).zfill(2)}"
+        return None
+    # CREDIT
+    for src in (label_line or "", label_entry or ""):
+        # Anglais d'abord : "Apr 30, 2026"
+        m = _CREDIT_EN_RE.search(src)
+        if m:
+            mon = _month_num(m.group(1))
+            if mon:
+                return f"{m.group(3)}-{mon:02d}-{int(m.group(2)):02d}"
+        # Français : "30 avr. 2026"
+        m = _CREDIT_FR_RE.search(src)
+        if m:
+            mon = _month_num(m.group(2))
+            if mon:
+                return f"{m.group(3)}-{mon:02d}-{int(m.group(1)):02d}"
+    return None
+
 
 # ----------------------------------------------------------------------
 # Modèle interne
@@ -70,9 +117,15 @@ class Line:
     def amount(self) -> Decimal:
         return self.debit if self.debit > 0 else self.credit
 
+    # apt_code et checkout_date sont calculés/enrichis dans fetch_target_lines
+    # (apt_code peut requérir un fallback sur les soeurs de l'écriture parente)
+    apt_code_override: str | None = None
+    checkout_date: str | None = None
+
     @property
     def apt_code(self) -> str | None:
-        """Extrait MAR135-2F depuis le label de ligne OU le label entry."""
+        if self.apt_code_override:
+            return self.apt_code_override
         for source in (self.label_line or "", self.entry_label or ""):
             m = APT_CODE_RE.search(source)
             if m:
@@ -211,6 +264,9 @@ def fetch_target_lines(
                 len(target), len(entry_ids_needed))
 
     # Enrichir label/date/journal_id de chaque entry (1 GET / entry)
+    # + Fix A : si une ligne 411 a un label trop court (pas d'apt_code), on cherche
+    #   l'apt_code dans les AUTRES lignes de la même écriture (les soeurs partagent
+    #   l'apt sur une vente Mews : 411 + 708101 + 44571008 pointent toutes la même résa).
     for i, line in enumerate(target):
         if not line.entry_id:
             continue
@@ -219,6 +275,23 @@ def fetch_target_lines(
             line.entry_label = entry.get("label")
             line.entry_date = entry.get("date")
             line.journal_id = (entry.get("journal") or {}).get("id")
+            # Fix A : si la ligne n'a pas trouvé d'apt_code, scanner les soeurs
+            if line.apt_code is None:
+                for sister in entry.get("ledger_entry_lines", []) or []:
+                    sister_label = sister.get("label") or ""
+                    m = APT_CODE_RE.search(sister_label)
+                    if m:
+                        line.apt_code_override = m.group(1)
+                        break
+            # V1 : extraction checkout_date (label de ligne + fallback soeurs)
+            line.checkout_date = extract_checkout_date(line.label_line, line.entry_label, line.side)
+            if line.checkout_date is None:
+                # Fallback : chercher dans les soeurs de l'écriture (sur DEBIT vente)
+                for sister in entry.get("ledger_entry_lines", []) or []:
+                    sister_co = extract_checkout_date(sister.get("label") or "", line.entry_label, line.side)
+                    if sister_co:
+                        line.checkout_date = sister_co
+                        break
         except requests.HTTPError as e:
             logger.warning("Skip entry %s : %s", line.entry_id, e)
         if (i + 1) % 100 == 0:
@@ -234,29 +307,36 @@ def fetch_target_lines(
 def build_pair_proposals(lines: list[Line]) -> dict[int, dict]:
     """Pour chaque ligne, propose une paire candidate.
 
-    Stratégie V0 :
-      - Index DEBIT par (apt_code, amount) → ventes Mews disponibles
-      - Pour chaque CREDIT (encaissement), cherche un DEBIT exact
-      - Si 1 candidat → 'paired'
+    Stratégie V1 :
+      - Index *précis* DEBIT par (account, apt_code, amount, checkout_date)
+      - Index *fallback* DEBIT par (account, apt_code, amount) — pour les lignes
+        sans checkout_date côté l'un des 2 sides
+      - Lookup en 2 étapes : précis → fallback
+      - Si 1 candidat à l'un des 2 niveaux → 'paired'
       - Si 0 candidat → 'no_match'
-      - Si >1 candidats → 'ambiguous'
+      - Si >1 candidats (même au niveau précis) → 'ambiguous' (pas de tie-breaker
+        heuristique, on laisse le comptable trancher)
 
-    Note V0 : DEBIT et CREDIT doivent partager le même compte 411
-    (411AIRBNB ↔ 411AIRBNB, 411BOOKING ↔ 411BOOKING).
+    Précondition : DEBIT et CREDIT partagent le même compte 411 (411AIRBNB ↔
+    411AIRBNB, 411BOOKING ↔ 411BOOKING) — vérifié par les requêtes BQ.
     """
-    # Index DEBIT par (account, apt_code, amount)
-    debit_index: dict[tuple, list[Line]] = defaultdict(list)
-    for ln in lines:
-        if ln.debit > 0 and ln.apt_code:
-            key = (ln.account, ln.apt_code, ln.amount)
-            debit_index[key].append(ln)
+    debit_precise: dict[tuple, list[Line]] = defaultdict(list)
+    debit_fallback: dict[tuple, list[Line]] = defaultdict(list)
+    credit_precise: dict[tuple, list[Line]] = defaultdict(list)
+    credit_fallback: dict[tuple, list[Line]] = defaultdict(list)
 
-    # Idem pour les CREDIT (au cas où on inverserait la recherche)
-    credit_index: dict[tuple, list[Line]] = defaultdict(list)
     for ln in lines:
-        if ln.credit > 0 and ln.apt_code:
-            key = (ln.account, ln.apt_code, ln.amount)
-            credit_index[key].append(ln)
+        if not ln.apt_code:
+            continue
+        key_fb = (ln.account, ln.apt_code, ln.amount)
+        if ln.debit > 0:
+            debit_fallback[key_fb].append(ln)
+            if ln.checkout_date:
+                debit_precise[(*key_fb, ln.checkout_date)].append(ln)
+        elif ln.credit > 0:
+            credit_fallback[key_fb].append(ln)
+            if ln.checkout_date:
+                credit_precise[(*key_fb, ln.checkout_date)].append(ln)
 
     proposals: dict[int, dict] = {}
     for ln in lines:
@@ -269,14 +349,23 @@ def build_pair_proposals(lines: list[Line]) -> dict[int, dict]:
                 "ambiguity_count": 0,
             }
             continue
-        # On cherche dans le sens opposé
-        if ln.side == "CREDIT":
-            candidates = debit_index.get((ln.account, ln.apt_code, ln.amount), [])
-        else:
-            candidates = credit_index.get((ln.account, ln.apt_code, ln.amount), [])
 
-        # Exclure soi-même par sécurité (jamais le cas en pratique mais defensive)
-        candidates = [c for c in candidates if c.id != ln.id]
+        # Étape 1 : lookup précis (avec checkout_date)
+        candidates: list[Line] = []
+        if ln.checkout_date:
+            idx_precise = debit_precise if ln.side == "CREDIT" else credit_precise
+            candidates = idx_precise.get(
+                (ln.account, ln.apt_code, ln.amount, ln.checkout_date), []
+            )
+            candidates = [c for c in candidates if c.id != ln.id]
+
+        # Étape 2 : fallback (sans checkout_date) si rien trouvé en précis
+        used_fallback = False
+        if not candidates:
+            idx_fb = debit_fallback if ln.side == "CREDIT" else credit_fallback
+            candidates = idx_fb.get((ln.account, ln.apt_code, ln.amount), [])
+            candidates = [c for c in candidates if c.id != ln.id]
+            used_fallback = True
 
         if len(candidates) == 1:
             c = candidates[0]
