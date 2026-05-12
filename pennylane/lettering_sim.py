@@ -121,6 +121,9 @@ class Line:
     # (apt_code peut requérir un fallback sur les soeurs de l'écriture parente)
     apt_code_override: str | None = None
     checkout_date: str | None = None
+    # V2 : enrichissement DWH via bill_number Mews
+    bill_number_mews: int | None = None
+    chain_root_id: str | None = None  # identifiant de chaîne dbt (pour désambiguïsation)
 
     @property
     def apt_code(self) -> str | None:
@@ -207,6 +210,78 @@ def _to_decimal(v) -> Decimal:
     if v in (None, "", 0):
         return Decimal("0")
     return Decimal(str(v))
+
+
+def enrich_via_dwh(lines: list[Line], bq: bigquery.Client) -> dict:
+    """V2 : enrichit chaque ligne avec :
+      - bill_number Mews (extrait du label entry 'C{n} / {bill_num}')
+      - apt_code (récupéré via la chaîne bill→reservation→apartment_code en DWH)
+      - chain_root_id (pour désambiguïsation lors du matching)
+
+    Fix V1.1 corrigé : la clé est bien `bill_number` Mews (pas reservation_number).
+    Les 2 séries Mews (bill_number / reservation_number) sont indépendantes.
+
+    Returns: stats dict pour logs."""
+
+    # Pass 1 : extraire bill_number du label entry pour chaque ligne
+    by_bill: dict[int, list[Line]] = defaultdict(list)
+    for ln in lines:
+        if not ln.entry_label:
+            continue
+        m = re.search(r"/\s*(\d+)\s*$", ln.entry_label)
+        if not m:
+            continue
+        ln.bill_number_mews = int(m.group(1))
+        by_bill[ln.bill_number_mews].append(ln)
+
+    if not by_bill:
+        return {"with_bill_num": 0, "apt_enriched": 0, "chain_enriched": 0}
+
+    logger.info("V2 enrich DWH : %d lignes ont un bill_number Mews extractable", sum(len(v) for v in by_bill.values()))
+
+    # Pass 2 : query DWH — récupère apt_code + chain_root_id par bill_number
+    sql = """
+    WITH bills AS (
+      SELECT bn.bill_number, bn.root_bill_id, bwr.reservation_ids
+      FROM `merveil-data-warehouse.intermediate_compta.int_compta__bills_net` bn
+      JOIN `merveil-data-warehouse.intermediate_compta.int_compta__bills_with_revenue` bwr
+        USING(bill_id)
+      WHERE bn.bill_number IN UNNEST(@nums)
+    ),
+    flat AS (
+      SELECT b.bill_number, b.root_bill_id, rid
+      FROM bills b
+      LEFT JOIN UNNEST(b.reservation_ids) AS rid
+    )
+    SELECT
+      f.bill_number,
+      ANY_VALUE(f.root_bill_id) AS root_bill_id,
+      -- apt_code PennyLane (sans préfixe P{xx}-)
+      ANY_VALUE(REGEXP_EXTRACT(r.apartment_code, r'^P\\d+-(.+)$')) AS apt_code_pl
+    FROM flat f
+    LEFT JOIN `merveil-data-warehouse.marts.fct_reservations` r
+      ON r.reservation_id = f.rid
+    GROUP BY f.bill_number
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ArrayQueryParameter("nums", "INT64", list(by_bill.keys()))]
+    )
+    apt_enriched = 0
+    chain_enriched = 0
+    for row in bq.query(sql, job_config=job_config).result():
+        for ln in by_bill.get(row.bill_number, []):
+            if ln.apt_code is None and row.apt_code_pl:
+                ln.apt_code_override = row.apt_code_pl
+                apt_enriched += 1
+            if row.root_bill_id:
+                ln.chain_root_id = row.root_bill_id
+                chain_enriched += 1
+    logger.info("  → apt_code enrichi : %d / chain_root_id : %d", apt_enriched, chain_enriched)
+    return {
+        "with_bill_num": sum(len(v) for v in by_bill.values()),
+        "apt_enriched": apt_enriched,
+        "chain_enriched": chain_enriched,
+    }
 
 
 def fetch_target_lines(
@@ -367,6 +442,15 @@ def build_pair_proposals(lines: list[Line]) -> dict[int, dict]:
             candidates = [c for c in candidates if c.id != ln.id]
             used_fallback = True
 
+        # V2 test : on AVAIT tenté de désambiguïser via chain_root_id en filtrant
+        # les candidats sur la même chaîne dbt. RÉSULTAT : -1 pt de précision
+        # (97.9% vs 98.9%) car la chaîne Mews regroupe les corrections internes
+        # (vente + avoir + revente), pas l'encaissement payout réel. Le comptable
+        # préfère matcher avec le payout (hors chaîne). Reverté.
+        #
+        # chain_root_id est tout de même renseigné (côté Line) à toutes fins
+        # utiles pour analyses futures.
+
         if len(candidates) == 1:
             c = candidates[0]
             proposals[ln.id] = {
@@ -483,6 +567,21 @@ def run(days: int = 60) -> dict:
 
     reader = PennyLaneReader(token)
     lines = fetch_target_lines(reader, from_date, to_date)
+
+    bq = bigquery.Client(project="merveil-data-warehouse")
+    # Note V2 (testé, reverté 2026-05-12) : on avait tenté d'enrichir l'apt_code
+    # via DWH (int_compta__bills_with_revenue → fct_reservations) quand le label
+    # PennyLane est tronqué (ex "25111, Airbnb, 30/04/2026"). Sur 60j, ça
+    # récupère ~8 MATCH supplémentaires mais introduit 2 WRONG (cas où le bill
+    # a plusieurs reservations rattachées : apt_code récupéré non déterministe).
+    # Ratio 4:1 jugé insuffisant pour la précision cible >99%. Code laissé
+    # dans enrich_via_dwh() pour future réactivation si besoin.
+    #
+    # On avait aussi testé la désambiguïsation par chain_root_id (filtre les
+    # candidats sur la même chaîne dbt). RÉSULTAT : -1 pt de précision car la
+    # chaîne Mews regroupe les corrections internes (vente + avoir + revente),
+    # pas l'encaissement payout réel. Reverté également.
+
     proposals = build_pair_proposals(lines)
 
     # Stats avant insert
@@ -491,7 +590,6 @@ def run(days: int = 60) -> dict:
         sim_counter[compute_sim_status(line, proposals[line.id])] += 1
     logger.info("Sim status : %s", dict(sim_counter))
 
-    bq = bigquery.Client(project="merveil-data-warehouse")
     n = write_to_bq(bq, run_id, run_at, lines, proposals)
 
     return {
