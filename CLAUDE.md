@@ -34,10 +34,41 @@ Triggered via HTTP POST by Cloud Scheduler (or manually).
 | `bq_only=true` | **skip** | INSERT (bq_only=true, ledger ids NULL) | Yes (suffixe `[BQ-ONLY]`) |
 | `test=true` | POST avec `[TEST]` préfixe | INSERT (test_mode=true) | Yes |
 
+## Architecture (refacto 2026-05-11 — Open/Closed)
+
+Le module est structuré pour qu'ajouter un nouveau flux (Mews Bills V1, Mews Payments V2) = écrire 1 classe `Source` sans toucher au reste.
+
+```
+booking-accounting/
+├── server.py              # Flask routes (~110 lignes) — instancie Source → appelle orchestrator
+├── orchestrator.py        # run_pipeline(source, ...) — fonction unique générique (~250 lignes)
+├── sources/               # Une classe par flux
+│   ├── base.py            # Source (ABC) + SourceFetchResult (dataclass)
+│   ├── booking.py         # BookingDriveSource ← Flux 1 Booking (Drive xlsx)
+│   ├── airbnb.py          # AirbnbDriveSource  ← Flux 1 Airbnb (Drive xlsx)
+│   ├── mews_bills.py      # 🚧 V1 — MewsBillsSource (BQ int_compta__bills_net → 706 + 411 DEBIT)
+│   └── mews_payments.py   # 🚧 V2 — MewsPaymentsSource (BQ raw_payments + Stripe → 511035 + 411 CREDIT)
+└── (autres modules réutilisés par tous : accounting, pennylane, bigquery, drive, lookups, validators)
+```
+
+**Interface `Source` (ABC)** :
+- `name: str` (`'booking'`, `'airbnb'`, etc.)
+- `entries_kwargs: dict` — kwargs pour `generate_entries()` (journal_code, account_*, ota_label, per_reservation_fees)
+- `fetch(processing_date) -> SourceFetchResult` — récupère batches + anomalies + mapping
+- `enrich_anomalies(result)` — hook optionnel (no-op par défaut)
+
+**Orchestrator** (`run_pipeline`) : 1 fonction, 11 étapes (fetch → enrich → bill lookup → generate_entries → validate → balance check → blocking handling → dry_run → test mode → POST PennyLane → BQ trace → archive Drive). Aucune logique OTA-spécifique.
+
+`_archive_run()` no-op si `drive_folder_id` vide (= Sources BQ comme `MewsBillsSource` n'archivent pas).
+
 ## Entrypoints
 | File | Role |
 |---|---|
-| `server.py` | Flask HTTP server — main entrypoint for Cloud Run |
+| `server.py` | Flask routes — parse body, instancie la bonne Source via `_SOURCE_FACTORIES`, délègue à `orchestrator.run_pipeline()` |
+| `orchestrator.py` | `run_pipeline()` — orchestrator unique générique |
+| `sources/base.py` | `Source` (ABC) + `SourceFetchResult` (dataclass) — interface commune |
+| `sources/booking.py` | `BookingDriveSource` — Flux 1 Booking depuis Drive |
+| `sources/airbnb.py` | `AirbnbDriveSource` — Flux 1 Airbnb depuis Drive (avec hook `enrich_anomalies` pour NON_EUR_CURRENCY) |
 | `parsers/booking.py` | `BookingExcelParser` — parses weekly Booking Excel into `BookingPayoutBatch` objects |
 | `parsers/airbnb.py` | `AirbnbParser` — parses monthly Airbnb Excel into payout batches |
 | `accounting/entries.py` | `generate_entries()` — builds PennyLane accounting lines from reservations |
@@ -191,6 +222,21 @@ Table native (pas d'auto-sync). Quand le DWH Feed Google Sheets est modifié :
 ---
 
 ## Changelog
+
+### 2026-05-12 — Visio Mews + ordre d'exécution révisé
+- **Visio Mews (Francesca)** : confirme qu'il n'y a **pas d'endpoint Mews pour les commissions Stripe / versements**. Pour Expedia/VRBO, réconciliation des commissions à faire via rapports plateformes (pas via Mews). Accès Stripe lecture seule sur compte Mews **non répondu** (esquivé, à reposer par email).
+- **Gap upsells Duve/Mews confirmé** : Mews en investigation avec Duve, pas de roadmap. Pattern observé côté BQ : 2052 bills Mews `State='Open'` sur 30j sans `IssuedUtc` (probablement payés via Stripe Duve qui ne push pas dans Mews). Action : contacter Duve directement.
+- **`MewsBillsSource` (flux 3) — utilité à revalider** : le comptable a confirmé que Mews déverse déjà nativement les écritures de vente dans PennyLane à J+3. Donc notre dev pourrait être redondant. Email envoyé au comptable 2026-05-12 avec 3 questions : (1) quelle référence pièce porte Mews dans PennyLane ? (= Number Mews ?) (2) split 706/447100/4457 fait par l'intégration native ? (3) cas non couverts ? Décision Phase 2 après réponse.
+- **Stripe direct + Stripe Duve** : Hatim a accès admin sur les 2 comptes → 2 clés API restricted read-only à créer côté Stripe, puis `StripeDirectSource` + `StripeDuveSource` (~1-2j chacun). Indépendant de Mews.
+- **Nouvel ordre d'exécution** :
+  - **Phase 1 (~2-2.5j)** : boucler 100% Airbnb/Booking — lettrage auto (POST `/lettering` PennyLane via `bill_number`) + dashboard 9.5 "Pipeline Comptable" pour validation comptable + réunion avec comptable. Le lettrage fonctionne **dès maintenant** sur le périmètre Airbnb/Booking en matchant ventes Mews déversées par intégration native ↔ nos encaissements OTA via `bill_number` commun.
+  - **Phase 2** : selon réponse comptable, `StripeDirectSource` + `StripeDuveSource` (toujours pertinents), `MewsBillsSource` (à valider), `MewsPaymentsSource` (bloqué côté commissions Mews mais possible avec taux figés).
+
+### 2026-05-11 — Refacto orchestrator + Sources (Open/Closed) + Sebastopol I-II
+- **Refacto pipeline** : extraction de la logique commune des 2 pipelines Booking + Airbnb dans `orchestrator.run_pipeline()` + interface `Source` (ABC) avec implémentations `BookingDriveSource` + `AirbnbDriveSource`. `server.py` passe de 521 à 110 lignes. API HTTP inchangée. Préparation à l'ajout des futurs pipelines V1 (Mews Bills / ventes) et V2 (Mews Payments / Stripe). Détails dans la section "Architecture" ci-dessus.
+- **Nouveau mapping appart** : ajout `Merveil Connecting Luxury Suites - Sebastopol I-II` (code interne `P01-SEB23-3F&3G`) → code comptable **`SEB23-3FG`** dans `AirbnbLogement_Compta.csv`. Décision : location combinée des 2 apparts Sebastopol I (SEB23-3F) + II (SEB23-3G) → nouveau code dédié, pas de split 50/50, pas de route vers un compte existant. Master file `Mapping_appart_code.csv` également mis à jour (+ complétion des suffixes 411AIRBNB/411BOOKING/etc. sur les ~140 logements pour matcher la convention PennyLane).
+- **Décision archi compta** : 3 pipelines DWH → PennyLane custom (option B), pas Mews → PennyLane natif. ADR complet dans `Archides/docs/decisions.md`. Vue d'ensemble dans `Archides/docs/compta-vision.md`. Doc HTML refondue dans `Archides/docs/compta-architecture.html` (multi-audience CEO/Comptable/IT).
+- **Run réussi Airbnb 12:55 UTC** : 104 résas, 2 warnings, balance OK, 12 batches PennyLane, 128 lignes BQ trace, revision `booking-pipeline-00046-jp6`.
 
 ### 2026-04-16 — Couverture BQ vérifiée + fix appartements_snapshot
 - Vérifié couverture `fct_reservations` pour Booking.com et Airbnb : `channel_number` 100%, `apartment_name` ~100%, `customer_name` ~99%
