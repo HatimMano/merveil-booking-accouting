@@ -155,7 +155,7 @@ Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11). Le s
 
 ### Cloud Run Job `lettering-sim`
 - **Image** : partagée avec service `booking-pipeline` (entrypoint override `python -m pennylane.lettering_sim 60`)
-- **Trigger** : `lettering-sim-daily` à 6h Paris (après dbt 6h + intégration native Mews J+3)
+- **Trigger** : `lettering-sim-daily` à 6h Paris (après dbt 6h + saisie manuelle comptable des ventes Mews dans PennyLane)
 - **Endpoint manual** : `gcloud run jobs execute lettering-sim --region=europe-west1`
 - **Sortie** : `pennylane.lettering_simulation` (BQ append-only, 1 row par ligne 411 inspectée)
 - **Conso côté dash** : `dashboard_finance.dash_finance_lettering_sim` → tab 9.5 Simulation lettrage Workflow manuel actuel :
@@ -234,10 +234,11 @@ Table native (pas d'auto-sync). Quand le DWH Feed Google Sheets est modifié :
 ### 2026-05-12 — Visio Mews + ordre d'exécution révisé
 - **Visio Mews (Francesca)** : confirme qu'il n'y a **pas d'endpoint Mews pour les commissions Stripe / versements**. Pour Expedia/VRBO, réconciliation des commissions à faire via rapports plateformes (pas via Mews). Accès Stripe lecture seule sur compte Mews **non répondu** (esquivé, à reposer par email).
 - **Gap upsells Duve/Mews confirmé** : Mews en investigation avec Duve, pas de roadmap. Pattern observé côté BQ : 2052 bills Mews `State='Open'` sur 30j sans `IssuedUtc` (probablement payés via Stripe Duve qui ne push pas dans Mews). Action : contacter Duve directement.
-- **`MewsBillsSource` (flux 3) — utilité à revalider** : le comptable a confirmé que Mews déverse déjà nativement les écritures de vente dans PennyLane à J+3. Donc notre dev pourrait être redondant. Email envoyé au comptable 2026-05-12 avec 3 questions : (1) quelle référence pièce porte Mews dans PennyLane ? (= Number Mews ?) (2) split 706/447100/4457 fait par l'intégration native ? (3) cas non couverts ? Décision Phase 2 après réponse.
+- **`MewsBillsSource` (flux 3) — PRIORITÉ V1, à coder cette semaine** : correction 2026-05-13 — il n'y a **AUCUNE intégration native Mews → PennyLane**. Le comptable saisit manuellement toutes les écritures de vente Mews depuis un bilan Excel Mews (~2-3 h tous les 5 jours = 12-15 h/mois rien que pour Airbnb+Booking). Notre erreur d'interprétation précédente venait de l'observation des écritures sur journal `3605247` qu'on attribuait à tort à du natif — c'était en fait la saisie comptable manuelle. Notre dev `MewsBillsSource` doit lire `int_compta__bills_net` et poster automatiquement (DEBIT 411<canal> + CREDIT 708101 HT + CREDIT 44571008 TVA). Effort 3-5 j. Gain ~20 h/mois côté comptable une fois Phase 2 en prod.
 - **Stripe direct + Stripe Duve** : Hatim a accès admin sur les 2 comptes → 2 clés API restricted read-only à créer côté Stripe, puis `StripeDirectSource` + `StripeDuveSource` (~1-2j chacun). Indépendant de Mews.
 - **Nouvel ordre d'exécution** :
-  - **Phase 1 (~2-2.5j)** : boucler 100% Airbnb/Booking — lettrage auto (POST `/lettering` PennyLane via `bill_number`) + dashboard 9.5 "Pipeline Comptable" pour validation comptable + réunion avec comptable. Le lettrage fonctionne **dès maintenant** sur le périmètre Airbnb/Booking en matchant ventes Mews déversées par intégration native ↔ nos encaissements OTA via `bill_number` commun.
+  - **Phase 1 (~3-5j)** : coder `MewsBillsSource` pour automatiser le déversement des ventes Mews (aujourd'hui manuel via Excel = 12-15 h/mois comptable). Lecture `int_compta__bills_net` → POST PennyLane (706 + 44571008 + 411<canal>). Mode `bq_only=true` pendant 2-3 sem en parallèle de la saisie comptable pour comparer.
+  - **Phase 2 (~1 sem)** : bascule live + activation auto-letter. Comptable arrête sa saisie, notre pipeline poste les ventes en temps réel après chaque polling Mews. Module auto-letter activé simultanément (précision V1 déjà à 98,9 % sur le tab 9.5).
   - **Phase 2** : selon réponse comptable, `StripeDirectSource` + `StripeDuveSource` (toujours pertinents), `MewsBillsSource` (à valider), `MewsPaymentsSource` (bloqué côté commissions Mews mais possible avec taux figés).
 
 ### 2026-05-11 — Refacto orchestrator + Sources (Open/Closed) + Sebastopol I-II
