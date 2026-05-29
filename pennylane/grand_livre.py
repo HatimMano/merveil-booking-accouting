@@ -31,7 +31,10 @@ PENNYLANE_BASE = "https://app.pennylane.com/api/external/v2"
 
 LOYER_PREFIX = "6041"
 CHARGES_PREFIX = "6042"
-TAXE_PREFIX = "604720"
+# Côté API Pennylane v2 le compte 604720 (Taxe foncière - TOM) est retourné
+# sous le numéro court "60472" (5 chars), pas "604720000000" comme dans le
+# grand livre xlsx. Confirmé via API direct le 2026-05-29.
+TAXE_PREFIX = "60472"
 
 # code_appart Merveil : P02-ABO52, P03-MAR181-0, P08-ROY15-5&6, P15-FRE17B-2F…
 APT_CODE_RE = re.compile(r"(P\d{2}-[A-Z]+\d+[A-Z]?-?[\w&]*)")
