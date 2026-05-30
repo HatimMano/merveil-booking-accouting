@@ -150,6 +150,7 @@ Trois jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehou
 | `airbnb-pipeline-daily` | (en pause) | Cloud Run service `booking-pipeline` /process (Airbnb) |
 | `booking-pipeline-weekly` | (en pause) | Cloud Run service `booking-pipeline` /process (Booking) |
 | `lettering-sim-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `lettering-sim` (simulation lettrage Airbnb+Booking sur 60j) |
+| `grand-livre-pull-monthly` | 5 du mois à 7h Paris ✅ | Cloud Run **Job** `grand-livre-pull` (pull comptes 6041/6042/60472 du mois précédent → `pennylane.raw_grand_livre`) |
 
 Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt).
 
@@ -226,6 +227,37 @@ Table native (pas d'auto-sync). Quand le DWH Feed Google Sheets est modifié :
   INSERT INTO `merveil-data-warehouse.sheets_raw.appartements_snapshot`
   SELECT * FROM `merveil-data-warehouse.sheets_raw.appartements`;
   ```
+
+---
+
+## Pipeline PennyLane Grand Livre (mai 2026)
+
+Module séparé du `booking-pipeline` (qui POSTe) — ici on **PULL** le grand livre PennyLane pour rapatrier les comptes loyer/charges/taxe foncière dans BQ. Source de données pour `/loyers` Tab 11.1.
+
+**Architecture** :
+- Script CLI : `pennylane/grand_livre.py`
+- Cloud Run Job : `grand-livre-pull` (image partagée avec `booking-pipeline`)
+- Scheduler : `grand-livre-pull-monthly` à **5 du mois 7h Paris** (cron `0 7 5 * *`)
+- Table BQ cible : `pennylane.raw_grand_livre` (append-only avec MERGE sur `ledger_entry_line_id`)
+
+**Filtres comptes** :
+- `LOYER_PREFIX = "6041"` → loyer (1 sous-compte par bail, label = "P02-ABO52-0&1 - Loyer")
+- `CHARGES_PREFIX = "6042"` → charges (idem pattern)
+- `TAXE_PREFIX = "60472"` (5 chars côté API, ≠ "604720000000" 12-chars du grand livre xlsx) → taxe foncière TOM. Label générique "Taxe foncière - TOM" → le code appart est dans `libelle_piece` (extracté par regex côté dbt `stg_pennylane__loyer_charges_taxes`).
+
+**Optimisations clés** :
+- `sort=-date` côté API (Pennylane v2 trie en date desc) → **early-stop** dès qu'on dépasse `from_date` (200 items consécutifs sous la borne). Pour 1 mois : 22k items scannés en 3 min au lieu de 613k en 31 min.
+- `limit=100` (param `per_page` ignoré par v2, vrai param = `limit`).
+- Retries 8× sur 429 / 5xx / Timeout / ConnectionError avec backoff exponentiel.
+- MERGE BQ sur `ledger_entry_line_id` (gère les corrections comptables tardives sans doublon).
+
+**Limites connues** :
+- ⚠️ **Taxe foncière : ~80% des écritures ont `libelle_piece` vide** (267 lignes, ~202 k€ sur 2025) → impossible à attribuer à un appart par regex. À voir avec Philippe (préfixe code appart à imposer dans le libellé) OU passer par compte fournisseur 401FONCxxxx.
+- ~26 apparts en compta SCI propriétaire (Archides n'est pas preneur) ne remontent pas dans cet API (autre dossier Pennylane). Couverture actuelle : 99/125 apparts pour loyer/charges.
+
+**Bootstrap historique** : `python -m pennylane.grand_livre --from-date 2025-01-01 --to-date 2026-05-31` (~25 min, 267k lignes scannées, 2 951 lignes mergées).
+
+**Run mensuel auto** : `python -m pennylane.grand_livre --last-month` (Cloud Run Job).
 
 ---
 
