@@ -410,28 +410,81 @@ class BookingExcelParser(OTAParser):
     """
     Parser for Booking.com weekly Excel exports.
 
-    File format (one sheet, header on row 0):
-      Col 0:  Ref Appart         — numeric apartment ID (float in Excel)
-      Col 1:  Type               — "Reservation" or "Commission adjustment"
-      Col 2:  Numéro de référence
-      Col 3:  Date de départ     — checkout date ("Mar 19, 2026")
-      Col 4:  Nom du client
-      Col 5:  Statut             — "ok" / "cancelled"
-      Col 6:  Devise             — "EUR"
-      Col 7:  Statut du paiement — "by_booking" / "Paid Online"
-      Col 8:  Montant            — gross amount (positive)
-      Col 9:  Commission         — negative
-      Col 10: Coûts de transaction (payment_charge) — negative
-      Col 11: Taxe de séjour (city_tax) — negative
-      Col 12: (empty)
-      Col 13: Net
-      Col 14: Date du paiement
-      Col 15: Identifiant du paiement (payout_id)
+    Header-based parsing (resilient to column reorders/insertions/removals).
+    Each canonical field is resolved via a list of EN/FR aliases — the first
+    matching header in the row wins. Duplicate headers in the file (Booking
+    sometimes repeats "Date du paiement" / "Date de départ" at the end) only
+    keep their first occurrence.
 
     Rows are grouped by payout_id to form payout batches.
     """
 
     SUPPORTED_TYPES = {"Reservation", "Commission adjustment", "Réservation", "Ajustement de la commission", "customer_complaint"}
+
+    # Canonical field name → list of header aliases (FR + EN variants).
+    # Order matters: first-matching alias in the file's header wins.
+    COLUMN_ALIASES: Dict[str, List[str]] = {
+        "ref_appart":      ["Ref Appart"],
+        "type":            ["Type"],
+        "ref_num":         ["Numéro de référence", "Reference number"],
+        "checkout":        ["Date de départ ou d'émission", "Date de départ", "Checkout"],
+        "guest_name":      ["Nom du client", "Guest name"],
+        "status":          ["Statut de la réservation", "Reservation status"],
+        "currency":        ["Devise", "Currency"],
+        "payment_status":  ["Statut du paiement", "Payment status"],
+        "amount":          ["Montant", "Amount"],
+        "commission":      ["Commission"],
+        "payment_charge":  ["Coûts de transaction", "Payment charge", "Payments Service Fee"],
+        "city_tax":        ["Taxe de séjour", "City tax", "Tourism tax"],
+        "net":             ["Net"],
+        "payout_date":     ["Date du paiement", "Payout date"],
+        "payout_id":       ["Identifiant du paiement", "Payout ID"],
+    }
+
+    # Canonical fields whose absence in the header is a BLOCKING error.
+    REQUIRED_FIELDS = ("ref_appart", "type", "amount", "payout_date", "payout_id")
+
+    def _build_col_map(self, header_row: tuple) -> Dict[str, int]:
+        """
+        Return {canonical_name: column_index} from the file's header row.
+        First occurrence of each header wins (Booking sometimes repeats
+        "Date du paiement" / "Date de départ" multiple times at the end).
+
+        Special case — city_tax: Booking ships this column WITHOUT a header
+        (always has, even when the parser was first written). If the alias
+        ("Taxe de séjour" / "City tax") isn't found, we fall back to the
+        position right after "Coûts de transaction" — provided there is a
+        gap between payment_charge and net (otherwise the column is gone).
+        """
+        header_idx: Dict[str, int] = {}
+        for idx, cell in enumerate(header_row):
+            if cell is None:
+                continue
+            name = str(cell).strip()
+            if name and name not in header_idx:
+                header_idx[name] = idx
+
+        col_map: Dict[str, int] = {}
+        for canonical, aliases in self.COLUMN_ALIASES.items():
+            for alias in aliases:
+                if alias in header_idx:
+                    col_map[canonical] = header_idx[alias]
+                    break
+
+        if "city_tax" not in col_map:
+            pc_idx = col_map.get("payment_charge")
+            net_idx = col_map.get("net")
+            if pc_idx is not None and net_idx is not None and net_idx - pc_idx >= 2:
+                col_map["city_tax"] = pc_idx + 1
+
+        return col_map
+
+    @staticmethod
+    def _cell(row: tuple, col_map: Dict[str, int], field: str):
+        idx = col_map.get(field)
+        if idx is None or idx >= len(row):
+            return None
+        return row[idx]
 
     def parse_file(self, path: Path) -> Tuple[List[Reservation], List[Anomaly]]:
         batches, anomalies = self.parse_into_batches(path)
@@ -481,9 +534,25 @@ class BookingExcelParser(OTAParser):
             ))
             return [], anomalies
 
+        col_map = self._build_col_map(all_rows[0])
+        missing = [f for f in self.REQUIRED_FIELDS if f not in col_map]
+        if missing:
+            anomalies.append(Anomaly(
+                type=AnomalyType.FILE_BAD_NAME,
+                severity=Severity.BLOCKING,
+                message=(
+                    f"Header Booking incomplet — champs introuvables: {missing}. "
+                    f"Header reçu: {[c for c in all_rows[0] if c]}"
+                ),
+                source_file=filename,
+                reservation_ref=None,
+                details={"missing": missing},
+            ))
+            return [], anomalies
+
         data_rows = all_rows[1:]  # skip header
 
-        # Group reservations by payout_id (col 15), preserving row order
+        # Group reservations by payout_id, preserving row order
         batches_map: Dict[str, List[Reservation]] = {}
         payout_dates: Dict[str, Optional[date]] = {}
 
@@ -491,18 +560,18 @@ class BookingExcelParser(OTAParser):
             if all(c is None for c in row):
                 continue
 
-            row_type = row[1]
+            row_type = self._cell(row, col_map, "type")
             if not row_type or row_type not in self.SUPPORTED_TYPES:
                 if row_type:
                     logger.debug("Row %d: ignoring type '%s'", row_num, row_type)
                 continue
 
-            payout_id = str(row[15] or "").strip()
+            payout_id = str(self._cell(row, col_map, "payout_id") or "").strip()
             if not payout_id:
                 continue
 
             if payout_id not in payout_dates:
-                pd_raw = row[14]
+                pd_raw = self._cell(row, col_map, "payout_date")
                 if isinstance(pd_raw, datetime):
                     payout_dates[payout_id] = pd_raw.date()
                 elif isinstance(pd_raw, date):
@@ -517,14 +586,14 @@ class BookingExcelParser(OTAParser):
                 anomalies.append(Anomaly(
                     type=AnomalyType.AMOUNT_MISMATCH,
                     severity=Severity.WARNING,
-                    message=f"Row {row_num}: cannot parse payout date '{row[14]}' — row skipped",
+                    message=f"Row {row_num}: cannot parse payout date '{self._cell(row, col_map, 'payout_date')}' — row skipped",
                     source_file=filename,
-                    reservation_ref=str(row[2] or ""),
+                    reservation_ref=str(self._cell(row, col_map, "ref_num") or ""),
                     details={"row": row_num},
                 ))
                 continue
 
-            res, res_anomalies = self._parse_row(row, row_num, filename, payout_id, payout_date)
+            res, res_anomalies = self._parse_row(row, col_map, row_num, filename, payout_id, payout_date)
             anomalies.extend(res_anomalies)
             if res is not None:
                 if payout_id not in batches_map:
@@ -552,16 +621,18 @@ class BookingExcelParser(OTAParser):
     def _parse_row(
         self,
         row: tuple,
+        col_map: Dict[str, int],
         row_num: int,
         filename: str,
         payout_id: str,
         payout_date: date,
     ) -> Tuple[Optional[Reservation], List[Anomaly]]:
         anomalies: List[Anomaly] = []
-        row_type = str(row[1] or "")
+        row_type = str(self._cell(row, col_map, "type") or "")
 
         # Ref Appart: float in Excel (e.g. 6698991.0) → "6698991"
-        if row[0] is None:
+        ref_appart_raw = self._cell(row, col_map, "ref_appart")
+        if ref_appart_raw is None:
             anomalies.append(Anomaly(
                 type=AnomalyType.MAPPING_NOT_FOUND,
                 severity=Severity.BLOCKING,
@@ -571,15 +642,16 @@ class BookingExcelParser(OTAParser):
                 details={"row": row_num},
             ))
             return None, anomalies
-        ref_appart = str(int(float(row[0])))
-        ref_num = str(int(float(row[2]))) if row[2] is not None else ""
+        ref_appart = str(int(float(ref_appart_raw)))
+        ref_num_raw = self._cell(row, col_map, "ref_num")
+        ref_num = str(int(float(ref_num_raw))) if ref_num_raw is not None else ""
 
         # Financial amounts
-        amount         = _cell_to_decimal(row[8])  or Decimal("0")
-        commission     = _cell_to_decimal(row[9])  or Decimal("0")
-        payment_charge = _cell_to_decimal(row[10]) or Decimal("0")
-        city_tax       = _cell_to_decimal(row[11]) or Decimal("0")
-        net_raw        = _cell_to_decimal(row[13])
+        amount         = _cell_to_decimal(self._cell(row, col_map, "amount"))         or Decimal("0")
+        commission     = _cell_to_decimal(self._cell(row, col_map, "commission"))     or Decimal("0")
+        payment_charge = _cell_to_decimal(self._cell(row, col_map, "payment_charge")) or Decimal("0")
+        city_tax       = _cell_to_decimal(self._cell(row, col_map, "city_tax"))       or Decimal("0")
+        net_raw        = _cell_to_decimal(self._cell(row, col_map, "net"))
 
         if row_type in ("Commission adjustment", "Ajustement de la commission", "customer_complaint"):
             net            = net_raw or Decimal("0")
@@ -593,10 +665,10 @@ class BookingExcelParser(OTAParser):
             payment_status = "by_booking"
         else:
             net            = net_raw if net_raw is not None else amount + commission + payment_charge + city_tax
-            guest_name     = str(row[4] or "").strip()
-            status         = str(row[5] or "ok").strip()
-            currency       = str(row[6] or "EUR").strip()
-            payment_status = str(row[7] or "by_booking").strip()
+            guest_name     = str(self._cell(row, col_map, "guest_name") or "").strip()
+            status         = str(self._cell(row, col_map, "status") or "ok").strip()
+            currency       = str(self._cell(row, col_map, "currency") or "EUR").strip()
+            payment_status = str(self._cell(row, col_map, "payment_status") or "by_booking").strip()
 
         # Currency check
         if currency not in SUPPORTED_CURRENCIES:
@@ -610,8 +682,8 @@ class BookingExcelParser(OTAParser):
             ))
             return None, anomalies
 
-        # Checkout date (col 3) — check_in is not available in this export
-        checkout_raw = row[3]
+        # Checkout date — check_in is not available in this export
+        checkout_raw = self._cell(row, col_map, "checkout")
         if isinstance(checkout_raw, datetime):
             checkout = checkout_raw.date()
         elif isinstance(checkout_raw, date):
