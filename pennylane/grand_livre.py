@@ -68,6 +68,7 @@ class PennylaneGLClient:
             "Accept": "application/json",
         })
         self._account_cache: dict[int, dict] = {}
+        self._entry_cache: dict[int, dict] = {}
 
     def iter_ledger_lines(self, from_date: str, to_date: str) -> Iterator[dict]:
         """Itère les ledger_entry_lines en ordre date DESC (early-stop friendly).
@@ -100,6 +101,13 @@ class PennylaneGLClient:
             )
         return self._account_cache[account_id]
 
+    def get_entry(self, entry_id: int) -> dict:
+        if entry_id not in self._entry_cache:
+            self._entry_cache[entry_id] = self._get(
+                f"{PENNYLANE_BASE}/ledger_entries/{entry_id}"
+            )
+        return self._entry_cache[entry_id]
+
     def _get(self, url: str, params: dict | None = None, max_retries: int = 8) -> dict:
         delay = 2.0
         last_err: str = ""
@@ -129,10 +137,14 @@ class PennylaneGLClient:
         raise requests.HTTPError(f"retries exhausted ({last_err}) on {url}")
 
 
-def transform_line(line: dict, account_info: dict, ingested_at: str) -> dict:
+def transform_line(line: dict, account_info: dict, entry_info: dict, ingested_at: str) -> dict:
     la = line.get("ledger_account") or {}
     num = str(la.get("number") or "")
     account_label = account_info.get("label") or ""
+    # libelle_piece = "Libellé de pièce" (en-tête de l'écriture parente),
+    # c'est là que le comptable met le code comptable (ex "JJR27-1 - OPTIMMO - 10/2025").
+    # line.label n'est qu'une note interne à la ligne, souvent vide ou résumée.
+    libelle_piece = entry_info.get("label") or line.get("label") or ""
     return {
         "ledger_entry_line_id": int(line["id"]),
         "ledger_entry_id": int((line.get("ledger_entry") or {}).get("id") or 0) or None,
@@ -143,7 +155,7 @@ def transform_line(line: dict, account_info: dict, ingested_at: str) -> dict:
         "account_label": account_label,
         "code_appart": extract_code_appart(account_label),
         "charge_type": classify(num),
-        "libelle_piece": line.get("label") or "",
+        "libelle_piece": libelle_piece,
         "debit": str(line.get("debit") or "0"),
         "credit": str(line.get("credit") or "0"),
         "created_at": line.get("created_at"),
@@ -288,11 +300,14 @@ def run(from_date: str, to_date: str, dry_run: bool = False) -> dict:
             continue
         account_id = (line.get("ledger_account") or {}).get("id")
         account_info = client.get_account(account_id) if account_id else {"label": ""}
-        rows.append(transform_line(line, account_info, ingested_at))
+        entry_id = (line.get("ledger_entry") or {}).get("id")
+        entry_info = client.get_entry(entry_id) if entry_id else {"label": ""}
+        rows.append(transform_line(line, account_info, entry_info, ingested_at))
     logger.info("out_of_window dropped: %d", out_of_window)
 
-    logger.info("Window %s → %s : scanned=%d, kept=%d, accts_cached=%d",
-                from_date, to_date, total, len(rows), len(client._account_cache))
+    logger.info("Window %s → %s : scanned=%d, kept=%d, accts_cached=%d, entries_cached=%d",
+                from_date, to_date, total, len(rows), len(client._account_cache),
+                len(client._entry_cache))
 
     if dry_run:
         logger.info("DRY RUN — no BQ write")
