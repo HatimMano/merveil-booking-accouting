@@ -243,7 +243,9 @@ Module séparé du `booking-pipeline` (qui POSTe) — ici on **PULL** le grand l
 **Filtres comptes** :
 - `LOYER_PREFIX = "6041"` → loyer (1 sous-compte par bail, label = "P02-ABO52-0&1 - Loyer")
 - `CHARGES_PREFIX = "6042"` → charges (idem pattern)
-- `TAXE_PREFIX = "60472"` (5 chars côté API, ≠ "604720000000" 12-chars du grand livre xlsx) → taxe foncière TOM. Label générique "Taxe foncière - TOM" → le code appart est dans `libelle_piece` (extracté par regex côté dbt `stg_pennylane__loyer_charges_taxes`).
+- `TAXE_PREFIX = "60472"` (5 chars côté API, ≠ "604720000000" 12-chars du grand livre xlsx) → taxe foncière TOM. Label générique "Taxe foncière - TOM" → le code appart est dans `libelle_piece` (extracté par cascade côté dbt `stg_pennylane__loyer_charges_taxes`).
+
+**Fix 2026-06-02 — `libelle_piece` = `entry.label` (Libellé de pièce)** : le puller utilisait `line.get("label")` qui est une note de ligne souvent vide ou résumée ("TF 2025", "taxe foncière"). Le vrai Libellé de pièce visible dans le grand livre Pennylane (ex `"JJR27-1 - OPTIMMO GESTION - 10/2025"`) est porté par l'écriture **parente** (`ledger_entry.label`). Ajout de `get_entry(id)` avec cache (ratio observé ~2.1 lignes/entry, donc ~1350 GET additionnels pour 2025+2026 → coût marginal). Bascule de la couverture TF de 11% à 99.8% matchable une fois `dbt seed mapping_pennylane_compta` + cascade staging en place. Détails → memory `project_pennylane_tf_coverage` côté dashboards-v2.
 
 **Optimisations clés** :
 - `sort=-date` côté API (Pennylane v2 trie en date desc) → **early-stop** dès qu'on dépasse `from_date` (200 items consécutifs sous la borne). Pour 1 mois : 22k items scannés en 3 min au lieu de 613k en 31 min.
@@ -252,7 +254,7 @@ Module séparé du `booking-pipeline` (qui POSTe) — ici on **PULL** le grand l
 - MERGE BQ sur `ledger_entry_line_id` (gère les corrections comptables tardives sans doublon).
 
 **Limites connues** :
-- ⚠️ **Taxe foncière : ~80% des écritures ont `libelle_piece` vide** (267 lignes, ~202 k€ sur 2025) → impossible à attribuer à un appart par regex. À voir avec Philippe (préfixe code appart à imposer dans le libellé) OU passer par compte fournisseur 401FONCxxxx.
+- ~~⚠️ **Taxe foncière : ~80% des écritures ont `libelle_piece` vide**~~ — **résolu 2026-06-02** par le fix `entry.label` ci-dessus + seed `mapping_pennylane_compta` + cascade staging. Couverture matchable passée à 99.8% (301 lignes / 230 k€ sur 2025). Limitation résiduelle : 100+ k€ de libellés contiennent un **code immeuble** ("HOC16 - ORALIA SULLY") qui couvre N sous-apparts → étape 4 du staging répartit en 1/N (simpliste, ~50-60% précision). **Mail envoyé à Philippe le 2026-06-05** pour trancher entre saisie par sous-code (idéal) ou prorata superficie côté DWH avec flag estimated. À ajuster selon sa réponse. Voir memory `project_pennylane_tf_coverage`.
 - ~26 apparts en compta SCI propriétaire (Archides n'est pas preneur) ne remontent pas dans cet API (autre dossier Pennylane). Couverture actuelle : 99/125 apparts pour loyer/charges.
 
 **Bootstrap historique** : `python -m pennylane.grand_livre --from-date 2025-01-01 --to-date 2026-05-31` (~25 min, 267k lignes scannées, 2 951 lignes mergées).
@@ -262,6 +264,17 @@ Module séparé du `booking-pipeline` (qui POSTe) — ici on **PULL** le grand l
 ---
 
 ## Changelog
+
+### 2026-06-05 — Incident Iavotsoa + sanity check anti-décalage
+- **Incident 2026-06-01** : fichier source Booking déposé par Iavotsoa avec valeurs **décalées d'1 colonne** par rapport aux entêtes (cf. mail Philippe 2026-06-04). Pipeline header-based → a parsé correctement chaque colonne selon son entête, mais les valeurs étant mal positionnées en amont, 41 écritures Pennylane ont été postées avec 411BOOKING au débit au lieu du crédit et 401BOOKING inversé aussi. 50 résas concernées (`260601 - Import Paiements Booking.xlsx`).
+- **Résolution 2026-06-05** : (1) Philippe a supprimé manuellement les 41 écritures dans l'UI Pennylane (l'API v2 ne supporte pas DELETE/cancel sur ledger_entries — testé, HTTP 404). (2) Hatim a uploadé le fichier corrigé (= onglet "Copie de Exports CSV Booking" du xlsx Philippe). (3) Pipeline re-déclenché via `gcloud scheduler jobs run booking-pipeline-weekly`. Vérification BQ : 411BOOKING 90763.62 € crédit / 51105 77621.08 € débit / 401BOOKING 13142.54 € débit — au centime près sur les attendus Philippe.
+- **Hardenings parser `parsers/booking.py`** (commit `70ba25e`) :
+  - **Aliases élargis** sur `city_tax` : ajout de `"Taxe séjour"` (avec accent, sans "de") et `"Taxe sejour"` (sans accent, sans "de"). En plus de `"Taxe de séjour"` existant.
+  - **Sanity check anti-décalage** dans `parse_into_batches` : si > 50% des résas ont `|city_tax| > |amount|`, émission d'une anomalie `BLOCKING` → l'orchestrator stoppe le POST Pennylane et archive le run avec anomaly sheet sur Drive. Aurait détecté l'incident avant qu'il ne touche Pennylane.
+- **Process à retenir** : en cas de mauvais déversement, suppression manuelle UI Pennylane uniquement (pas d'API). Replay = fichier source corrigé + `gcloud scheduler jobs run booking-pipeline-weekly`. Mémoire `project_compta_booking_iavotsoa_incident` côté dashboards-v2.
+
+### 2026-06-02 — Fix puller grand_livre.py (libelle_piece = entry.label)
+- Pull libellé pièce depuis `ledger_entry.label` (parente) au lieu de `line.label` (note ligne). Ajout `get_entry(id)` cached. Backfill complet 2025-01 → 2026-11 (~25 min). Couverture matchable TF 11% → 99.8%. Détails section "Pipeline PennyLane Grand Livre" ci-dessus.
 
 ### 2026-05-12 — Visio Mews + ordre d'exécution révisé
 - **Visio Mews (Francesca)** : confirme qu'il n'y a **pas d'endpoint Mews pour les commissions Stripe / versements**. Pour Expedia/VRBO, réconciliation des commissions à faire via rapports plateformes (pas via Mews). Accès Stripe lecture seule sur compte Mews **non répondu** (esquivé, à reposer par email).
