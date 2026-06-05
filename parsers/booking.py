@@ -435,7 +435,7 @@ class BookingExcelParser(OTAParser):
         "amount":          ["Montant", "Amount"],
         "commission":      ["Commission"],
         "payment_charge":  ["Coûts de transaction", "Payment charge", "Payments Service Fee"],
-        "city_tax":        ["Taxe de séjour", "City tax", "Tourism tax"],
+        "city_tax":        ["Taxe de séjour", "Taxe séjour", "Taxe sejour", "City tax", "Tourism tax"],
         "net":             ["Net"],
         "payout_date":     ["Date du paiement", "Payout date"],
         "payout_id":       ["Identifiant du paiement", "Payout ID"],
@@ -471,6 +471,10 @@ class BookingExcelParser(OTAParser):
                     col_map[canonical] = header_idx[alias]
                     break
 
+        # Fallback positionnel historique : utile uniquement si la colonne
+        # taxe de séjour n'a aucun header. Conservé pour les vieux exports
+        # mais ne déclenche que si le header est *vraiment* vide entre
+        # payment_charge et net (>= 2 colonnes d'écart).
         if "city_tax" not in col_map:
             pc_idx = col_map.get("payment_charge")
             net_idx = col_map.get("net")
@@ -608,6 +612,39 @@ class BookingExcelParser(OTAParser):
             )
             for pid, reservations in batches_map.items()
         ]
+
+        # Sanity check anti-décalage : si la majorité des résas ont une taxe
+        # de séjour supérieure en valeur absolue au montant brut, c'est presque
+        # toujours le signe d'un décalage de colonnes en amont (= les valeurs
+        # ne sont plus alignées avec les entêtes du fichier source). Cas vu le
+        # 2026-06-01 : 41 écritures Pennylane à supprimer manuellement après
+        # coup. On préfère bloquer fort que poster des écritures inversées.
+        all_reservations = [r for b in batches for r in b.reservations]
+        if all_reservations:
+            n_misaligned = sum(
+                1 for r in all_reservations
+                if abs(r.city_tax) > abs(r.amount) and abs(r.amount) > 0
+            )
+            ratio = n_misaligned / len(all_reservations)
+            if ratio > 0.5:
+                anomalies.append(Anomaly(
+                    type=AnomalyType.AMOUNT_MISMATCH,
+                    severity=Severity.BLOCKING,
+                    message=(
+                        f"Sanity check failed : {n_misaligned}/{len(all_reservations)} "
+                        f"résas ont |taxe_séjour| > |montant_brut|. "
+                        f"Probable décalage de colonnes dans le fichier source — "
+                        f"vérifier que les valeurs sont bien alignées avec les entêtes "
+                        f"(Montant / Commission / Coûts / Taxe / Net)."
+                    ),
+                    source_file=filename,
+                    reservation_ref=None,
+                    details={
+                        "n_misaligned": n_misaligned,
+                        "n_total": len(all_reservations),
+                        "ratio": round(ratio, 3),
+                    },
+                ))
 
         logger.info(
             "Parsed Booking Excel '%s': %d payout batch(es), %d reservation(s), %d anomaly(ies)",
