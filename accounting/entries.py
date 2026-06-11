@@ -77,6 +77,7 @@ def generate_entries(
     account_client: str = ACCOUNT_CLIENT,
     account_supplier: str = ACCOUNT_SUPPLIER,
     account_cancellation_fee: Optional[str] = None,
+    account_commission_adjustment: Optional[str] = None,
     ota_label: str = "BOOKING",
     per_reservation_fees: bool = False,
     bill_lookup: Optional[Dict[str, Tuple[Optional[str], Optional[str]]]] = None,
@@ -106,6 +107,11 @@ def generate_entries(
         account_supplier:        Supplier account code (default "401BOOKING").
         account_cancellation_fee: If provided, Airbnb "Frais d'annulation" rows are
                                   routed here (e.g. "604610") instead of account_client.
+        account_commission_adjustment: If provided, Booking "Commission adjustment"
+                                  rows (reservation_status="Commission adjustment")
+                                  are routed here (e.g. "401BOOKING") instead of
+                                  account_client, with label
+                                  "{ota_label} - {code_comptable} - Comm ajustement".
         ota_label:               OTA name used in entry labels (default "BOOKING").
 
     Returns:
@@ -210,6 +216,10 @@ def generate_entries(
             account_cancellation_fee is not None
             and r.reservation_status == "Frais d'annulation"
         )
+        is_commission_adjustment = (
+            account_commission_adjustment is not None
+            and r.reservation_status == "Commission adjustment"
+        )
 
         bill_id_mews, bill_number = (bill_lookup or {}).get(r.reference_number, (None, None))
 
@@ -223,6 +233,26 @@ def generate_entries(
                 label=f"{r.code_comptable} - {ota_label} - Frais d'annulation - {r.guest_name} - {r.reference_number}",
                 debit=-gross_excl_city_tax if gross_excl_city_tax < 0 else gross_excl_city_tax,
                 credit=None,
+                ota_reservation_ref=r.reference_number,
+                ref_appart=r.ref_appart,
+                code_comptable=r.code_comptable,
+                payout_date=r.payout_date,
+                bill_id_mews=bill_id_mews,
+            ))
+        elif is_commission_adjustment:
+            # Route Booking "Commission adjustment" rows directly to 401BOOKING
+            # (supplier) instead of 411BOOKING (client) — demande Philippe 2026-06-08.
+            # gross_excl_city_tax == r.amount == r.net for these rows (city_tax = 0
+            # injecté par le parser). Net négatif (Booking prélève en plus) → DEBIT 401.
+            # Net positif (rétrocession Booking) → CREDIT 401.
+            entries.append(AccountingEntry(
+                journal=journal_code,
+                date=processing_date,
+                ref_piece=bill_number or "",
+                account=account_commission_adjustment,
+                label=f"{ota_label} - {r.code_comptable} - Comm ajustement",
+                debit=-gross_excl_city_tax if gross_excl_city_tax < 0 else None,
+                credit=gross_excl_city_tax if gross_excl_city_tax >= 0 else None,
                 ota_reservation_ref=r.reference_number,
                 ref_appart=r.ref_appart,
                 code_comptable=r.code_comptable,

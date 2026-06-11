@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from config.mapping_loader import load_mapping
+from config.settings import ACCOUNT_SUPPLIER
 from parsers.booking import BookingExcelParser
 from validators.anomalies import check_duplicate_reservations
 from .base import Source, SourceFetchResult
@@ -19,7 +20,11 @@ class BookingDriveSource(Source):
     @property
     def entries_kwargs(self) -> dict[str, Any]:
         # Booking : commission éclatée par réservation (demande expert-comptable 2026-04-13)
-        return {"per_reservation_fees": True}
+        # + ajustements commission routés vers 401BOOKING (demande Philippe 2026-06-08)
+        return {
+            "per_reservation_fees": True,
+            "account_commission_adjustment": ACCOUNT_SUPPLIER,
+        }
 
     def __init__(self, drive_client, folder_id: str, mapping_path: Path, tmp_dir: Path):
         self.drive = drive_client

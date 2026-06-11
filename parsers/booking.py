@@ -696,8 +696,11 @@ class BookingExcelParser(OTAParser):
             commission     = Decimal("0")
             payment_charge = Decimal("0")
             city_tax       = Decimal("0")
-            guest_name     = "Remboursement client" if row_type == "customer_complaint" else "Ajustement commission"
-            status         = "ok"
+            is_commission_adjustment = row_type in ("Commission adjustment", "Ajustement de la commission")
+            guest_name     = "Ajustement commission" if is_commission_adjustment else "Remboursement client"
+            # reservation_status est utilisé downstream par accounting.entries pour router
+            # les ajustements commission vers 401BOOKING (au lieu du 411BOOKING par défaut).
+            status         = "Commission adjustment" if is_commission_adjustment else "ok"
             currency       = "EUR"
             payment_status = "by_booking"
         else:
@@ -731,7 +734,7 @@ class BookingExcelParser(OTAParser):
             checkout = payout_date
         check_in = checkout
 
-        if status != "ok" and amount != Decimal("0"):
+        if status not in ("ok", "Commission adjustment") and amount != Decimal("0"):
             anomalies.append(Anomaly(
                 type=AnomalyType.CANCELLED_WITH_AMOUNT,
                 severity=Severity.WARNING,

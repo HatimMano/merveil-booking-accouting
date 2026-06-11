@@ -107,6 +107,8 @@ Journal balanced: `DEBIT = CREDIT` always.
 
 **Special case — Airbnb "Frais d'annulation"**: routed directly to `604610` (no 411AIRBNB).
 
+**Special case — Booking "Commission adjustment"** (depuis 2026-06-11) : routé directement à `401BOOKING` (compte fournisseur), pas `411BOOKING`. Demande Philippe 2026-06-08 — ces ajustements correspondent à des corrections de commission Booking sans contrepartie résa (col M déductible mais col J vide). Label : `BOOKING - {code_comptable} - Comm ajustement`. DEBIT 401 si net négatif (Booking prélève plus), CREDIT 401 si net positif (rétrocession). Branché côté `sources/booking.py` via `entries_kwargs.account_commission_adjustment = ACCOUNT_SUPPLIER`.
+
 ## Archive & anomaly flow (real run only)
 After a successful real run:
 1. `Archive {date}/` subfolder created in the Drive root folder
@@ -264,6 +266,15 @@ Module séparé du `booking-pipeline` (qui POSTe) — ici on **PULL** le grand l
 ---
 
 ## Changelog
+
+### 2026-06-11 — Routage "Commission adjustment" Booking vers 401BOOKING
+- Demande Philippe (mail 2026-06-08) : les rows `Commission adjustment` du CSV Booking (col M déduction mais col J vide) doivent aller en **DEBIT 401BOOKING** (fournisseur) avec libellé `BOOKING - {code_comptable} - Comm ajustement`. Avant : routées comme un refund client en DEBIT 411BOOKING avec label guest+CO.
+- **Implémentation** :
+  - `parsers/booking.py` : `reservation_status = "Commission adjustment"` pour ces rows (au lieu de `"ok"`). Exclusion du check `CANCELLED_WITH_AMOUNT` sur ce nouveau status.
+  - `accounting/entries.py` : nouveau param `account_commission_adjustment: Optional[str]`. Quand fourni + `r.reservation_status == "Commission adjustment"` → route vers ce compte avec label spec Philippe. Sens DEBIT si net négatif, CREDIT si positif.
+  - `sources/booking.py` : `entries_kwargs` ajoute `"account_commission_adjustment": ACCOUNT_SUPPLIER`. Airbnb non affecté (n'a pas ce row type).
+- **Validation** : test intégration sur le CSV du 8 juin Philippe (46 batches, 61 résas, 4 commission adjustments) — toutes les 4 (lignes 6/18/39/41) sont correctement routées vers 401BOOKING avec le bon libellé, balance préservée sur les 46 batches.
+- **Process pour Philippe** : à partir de la prochaine bascule (image redeploy), il peut déposer le CSV/xlsx Booking habituel sans manip préalable, même quand il contient des Commission adjustment.
 
 ### 2026-06-05 — Incident Iavotsoa + sanity check anti-décalage
 - **Incident 2026-06-01** : fichier source Booking déposé par Iavotsoa avec valeurs **décalées d'1 colonne** par rapport aux entêtes (cf. mail Philippe 2026-06-04). Pipeline header-based → a parsé correctement chaque colonne selon son entête, mais les valeurs étant mal positionnées en amont, 41 écritures Pennylane ont été postées avec 411BOOKING au débit au lieu du crédit et 401BOOKING inversé aussi. 50 résas concernées (`260601 - Import Paiements Booking.xlsx`).
