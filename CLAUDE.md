@@ -267,6 +267,12 @@ Module séparé du `booking-pipeline` (qui POSTe) — ici on **PULL** le grand l
 
 ## Changelog
 
+### 2026-06-15 — Classeur Booking multi-onglets + fix lookup Mews
+- **Sélection auto de l'onglet** (`parsers/booking.py`) : Philippe dépose désormais un classeur avec onglets de contrôle (`Export Encaissements non-lettré`, `Matrice de vérification`, `Journal`) en plus de `Exports CSV Booking`. `wb.active` pointait sur le mauvais onglet → `No batches found`. Le parser retient maintenant le 1er onglet dont l'entête mappe les 5 `REQUIRED_FIELDS`, fallback `wb.active` pour les fichiers mono-onglet. Validé sur `260615` : onglet `Exports CSV Booking` sélectionné, 44 batches, 53 résas, balance OK, ajustement commission `160,28 €` (MTM13-2G) correctement routé 401BOOKING.
+- **Fix lookup Mews `ref_piece`** (`lookups/mews.py`) : `ScalarQueryParameterType(name, type)` cassait sur `google-cloud-bigquery` 3.x (signature `(type_, *, name=...)`) → warning non-fatal `takes 2 positional arguments but 3 were given`, `ref_piece`/`bill_id_mews` vides dans le trace BQ (rattrapés par self-healing dbt). Corrigé en keyword-only. Après fix : `50/51 refs matched (48 avec bill_number)`.
+- **Revisions** : `booking-pipeline-00056-z7t` (parser) puis `00057-vl2` (lookup). Dry_run `260615` : 44 batches, 53 résas, balance OK, 0 blocking, 3 warnings bénins.
+- ⚠️ **Anomalie données à trancher** : résa `5983771449` (Wioleta Buczyńska, appart 3788679) présente en **3 lignes identiques** dans `260615` → triple comptage potentiel CREDIT 411BOOKING. Détecté en WARNING (le check duplicate ne déduplique pas). Les totaux de Philippe (Net 98 684,48 €) incluent les 3 copies. **Run réel suspendu en attente de décision** (vrai doublon source à nettoyer vs légitime).
+
 ### 2026-06-11 — Routage "Commission adjustment" Booking vers 401BOOKING
 - Demande Philippe (mail 2026-06-08) : les rows `Commission adjustment` du CSV Booking (col M déduction mais col J vide) doivent aller en **DEBIT 401BOOKING** (fournisseur) avec libellé `BOOKING - {code_comptable} - Comm ajustement`. Avant : routées comme un refund client en DEBIT 411BOOKING avec label guest+CO.
 - **Implémentation** :
