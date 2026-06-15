@@ -570,6 +570,12 @@ class BookingExcelParser(OTAParser):
         # Group reservations by payout_id, preserving row order
         batches_map: Dict[str, List[Reservation]] = {}
         payout_dates: Dict[str, Optional[date]] = {}
+        # Dédup des lignes STRICTEMENT identiques (même résa, payout et tous
+        # montants). Vu sur 260615 : résa 5983771449 répétée 3× à l'identique
+        # → triple comptage CREDIT 411. On garde la 1re occurrence et on trace
+        # chaque doublon. On ne dédup PAS les lignes de même ref aux montants
+        # différents (= modif/correction légitime).
+        seen_rows: set = set()
 
         for row_num, row in enumerate(data_rows, start=2):
             if all(c is None for c in row):
@@ -611,6 +617,26 @@ class BookingExcelParser(OTAParser):
             res, res_anomalies = self._parse_row(row, col_map, row_num, filename, payout_id, payout_date)
             anomalies.extend(res_anomalies)
             if res is not None:
+                dedup_key = (
+                    res.reference_number, res.payout_id, res.ref_appart,
+                    res.amount, res.net, res.commission,
+                    res.payment_charge, res.city_tax, res.reservation_status,
+                )
+                if dedup_key in seen_rows:
+                    anomalies.append(Anomaly(
+                        type=AnomalyType.DUPLICATE_RESERVATION,
+                        severity=Severity.WARNING,
+                        message=(
+                            f"Row {row_num}: ligne strictement identique à une "
+                            f"précédente (résa {res.reference_number}, payout "
+                            f"{res.payout_id}, net {res.net}) — écartée (dédup)."
+                        ),
+                        source_file=filename,
+                        reservation_ref=res.reference_number,
+                        details={"row": row_num},
+                    ))
+                    continue
+                seen_rows.add(dedup_key)
                 if payout_id not in batches_map:
                     batches_map[payout_id] = []
                 batches_map[payout_id].append(res)
