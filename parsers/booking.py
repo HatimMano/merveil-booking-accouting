@@ -525,7 +525,18 @@ class BookingExcelParser(OTAParser):
             ))
             return [], anomalies
 
+        # Sélection de l'onglet : Philippe dépose parfois un classeur multi-onglets
+        # (onglets de contrôle "Export Encaissements non-lettré" / "Matrice de
+        # vérification" en plus de l'export). `wb.active` peut alors pointer sur le
+        # mauvais onglet → 0 batch. On retient le 1er onglet dont l'entête mappe
+        # tous les REQUIRED_FIELDS, fallback sur wb.active (fichiers mono-onglet).
         ws = wb.active
+        for candidate in wb.worksheets:
+            header = next(candidate.iter_rows(max_row=1, values_only=True), ())
+            cmap = self._build_col_map(header)
+            if all(f in cmap for f in self.REQUIRED_FIELDS):
+                ws = candidate
+                break
         all_rows = list(ws.iter_rows(values_only=True))
         if len(all_rows) < 2:
             anomalies.append(Anomaly(
