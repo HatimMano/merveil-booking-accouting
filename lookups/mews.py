@@ -111,8 +111,8 @@ def lookup_bills(
             bigquery.ArrayQueryParameter(
                 "targets",
                 bigquery.StructQueryParameterType(
-                    bigquery.ScalarQueryParameterType("ota_ref", "STRING"),
-                    bigquery.ScalarQueryParameterType("gross", "FLOAT64"),
+                    bigquery.ScalarQueryParameterType("STRING", name="ota_ref"),
+                    bigquery.ScalarQueryParameterType("FLOAT64", name="gross"),
                 ),
                 [
                     bigquery.StructQueryParameter(
