@@ -193,7 +193,10 @@ def generate_entries(
                 payout_date=r.payout_date,
                 bill_id_mews=bill_id_mews,
             ))
-    else:
+    elif total_fees != 0:
+        # Skip the aggregate supplier line when there are no fees at all
+        # (e.g. a batch made only of cancellation-fee reimbursements) — avoids
+        # posting empty 0.00 lines to PennyLane.
         entries.append(AccountingEntry(
             journal=journal_code,
             date=processing_date,
