@@ -214,7 +214,10 @@ def generate_entries(
 
         is_cancellation_fee = (
             account_cancellation_fee is not None
-            and r.reservation_status == "Frais d'annulation"
+            and r.reservation_status in (
+                "Frais d'annulation",
+                "Remboursement des frais d'annulation",
+            )
         )
         is_commission_adjustment = (
             account_commission_adjustment is not None
@@ -224,15 +227,18 @@ def generate_entries(
         bill_id_mews, bill_number = (bill_lookup or {}).get(r.reference_number, (None, None))
 
         if is_cancellation_fee:
-            # Route directly to 604610 — no intermediate 411AIRBNB step
+            # Route directly to 604610 — no intermediate 411AIRBNB step.
+            # Sign-based: "Frais d'annulation" (Montant négatif) → DEBIT 604610 (charge),
+            # "Remboursement des frais d'annulation" (Montant positif) → CREDIT 604610
+            # (Airbnb rembourse les frais — demande Philippe 2026-06-15).
             entries.append(AccountingEntry(
                 journal=journal_code,
                 date=processing_date,
                 ref_piece=bill_number or "",
                 account=account_cancellation_fee,
-                label=f"{r.code_comptable} - {ota_label} - Frais d'annulation - {r.guest_name} - {r.reference_number}",
-                debit=-gross_excl_city_tax if gross_excl_city_tax < 0 else gross_excl_city_tax,
-                credit=None,
+                label=f"{r.code_comptable} - {ota_label} - {r.reservation_status} - {r.guest_name} - {r.reference_number}",
+                debit=None if gross_excl_city_tax >= 0 else -gross_excl_city_tax,
+                credit=gross_excl_city_tax if gross_excl_city_tax >= 0 else None,
                 ota_reservation_ref=r.reference_number,
                 ref_appart=r.ref_appart,
                 code_comptable=r.code_comptable,

@@ -94,7 +94,7 @@ Flat weekly Excel export from Booking.com extranet. One row per reservation.
 
 ## Input format — Airbnb (Excel)
 Monthly Excel from Airbnb. Contains "Payout" header rows followed by their reservations.
-- **Row types processed**: `Réservation`, `Régularisation de la résolution`, `Hors réservation`, `Frais d'annulation`
+- **Row types processed**: `Réservation`, `Régularisation de la résolution`, `Hors réservation`, `Frais d'annulation`, `Remboursement des frais d'annulation`
 - Payout rows mark the start of a new batch
 
 ## Accounting logic (both OTAs)
@@ -105,7 +105,7 @@ CREDIT 411BOOKING/411AIRBNB = Amount − |CityTax| per reservation
 ```
 Journal balanced: `DEBIT = CREDIT` always.
 
-**Special case — Airbnb "Frais d'annulation"**: routed directly to `604610` (no 411AIRBNB).
+**Special case — Airbnb "Frais d'annulation" / "Remboursement des frais d'annulation"**: tous deux routés directement vers `604610` (pas de 411AIRBNB), débit/crédit selon le signe du Montant : `Frais d'annulation` (Montant négatif) → **DEBIT** 604610 (charge), `Remboursement des frais d'annulation` (Montant positif) → **CREDIT** 604610 (Airbnb rembourse — demande Philippe 2026-06-15). Label = `{code} - AIRBNB - {type} - {guest} - {ref}`.
 
 **Special case — Booking "Commission adjustment"** (depuis 2026-06-11) : routé directement à `401BOOKING` (compte fournisseur), pas `411BOOKING`. Demande Philippe 2026-06-08 — ces ajustements correspondent à des corrections de commission Booking sans contrepartie résa (col M déductible mais col J vide). Label : `BOOKING - {code_comptable} - Comm ajustement`. DEBIT 401 si net négatif (Booking prélève plus), CREDIT 401 si net positif (rétrocession). Branché côté `sources/booking.py` via `entries_kwargs.account_commission_adjustment = ACCOUNT_SUPPLIER`.
 
@@ -266,6 +266,15 @@ Module séparé du `booking-pipeline` (qui POSTe) — ici on **PULL** le grand l
 ---
 
 ## Changelog
+
+### 2026-06-16 — Airbnb "Remboursement des frais d'annulation" → CREDIT 604610
+- Demande Philippe (mail) : Airbnb rembourse des frais d'annulation (RC : Emilia/Louise) → **crédit du compte 604610**. Fichiers `260609` / `260615 Import Airbnb.xlsx`.
+- Type `Remboursement des frais d'annulation` était absent de `AIRBNB_RESERVATION_TYPES` → lignes ignorées par le parser (43 le 09/06, 77 le 15/06).
+- **Implémentation** :
+  - `config/settings.py` : ajout du type à `AIRBNB_RESERVATION_TYPES`.
+  - `accounting/entries.py` : la branche `is_cancellation_fee` (604610) matche désormais les 2 types et route en **débit/crédit selon le signe** (positif → CREDIT, négatif → DEBIT) au lieu d'un débit forcé. Label dynamique sur `reservation_status`. Comportement `Frais d'annulation` inchangé (Montant toujours négatif → DEBIT).
+  - `config/mapping/AirbnbLogement_Compta.csv` : ajout `Merveil - Signature Suite - Louvre - Bourse II` → `BRS1-5G` (manquant, MAPPING_NOT_FOUND bloquant sur 260615).
+- **Validation locale** (dry, non posté) : `260609` 113 résas, balance 0,00 €, 604610 CREDIT 23 458,11 € / 43 lignes. `260615` 376 résas, 0 anomalie, balance 0,00 €, 604610 CREDIT 44 165,93 € (77 remb) + DEBIT 657,00 € (2 frais).
 
 ### 2026-06-15 — Classeur Booking multi-onglets + fix lookup Mews
 - **Sélection auto de l'onglet** (`parsers/booking.py`) : Philippe dépose désormais un classeur avec onglets de contrôle (`Export Encaissements non-lettré`, `Matrice de vérification`, `Journal`) en plus de `Exports CSV Booking`. `wb.active` pointait sur le mauvais onglet → `No batches found`. Le parser retient maintenant le 1er onglet dont l'entête mappe les 5 `REQUIRED_FIELDS`, fallback `wb.active` pour les fichiers mono-onglet. Validé sur `260615` : onglet `Exports CSV Booking` sélectionné, 44 batches, 53 résas, balance OK, ajustement commission `160,28 €` (MTM13-2G) correctement routé 401BOOKING.
