@@ -146,13 +146,14 @@ See `config/settings.py` for full mapping. Key codes:
 ```
 
 ## Cloud Scheduler jobs
-Trois jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
+Jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
 | Job | Schedule | Cible |
 |---|---|---|
 | `airbnb-pipeline-daily` | (en pause) | Cloud Run service `booking-pipeline` /process (Airbnb) |
 | `booking-pipeline-weekly` | (en pause) | Cloud Run service `booking-pipeline` /process (Booking) |
 | `lettering-sim-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `lettering-sim` (simulation lettrage Airbnb+Booking sur 60j) |
 | `grand-livre-pull-monthly` | 5 du mois à 7h Paris ✅ | Cloud Run **Job** `grand-livre-pull` (pull comptes 6041/6042/60472 du mois précédent → `pennylane.raw_grand_livre`) |
+| `ledger-full-pull-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `ledger-full-pull` (grand livre COMPLET tous comptes, daily incr. overlap 45j → `pennylane.raw_ledger_lines`) — cf. Lot A ci-dessous |
 
 Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt).
 
@@ -262,6 +263,28 @@ Module séparé du `booking-pipeline` (qui POSTe) — ici on **PULL** le grand l
 **Bootstrap historique** : `python -m pennylane.grand_livre --from-date 2025-01-01 --to-date 2026-05-31` (~25 min, 267k lignes scannées, 2 951 lignes mergées).
 
 **Run mensuel auto** : `python -m pennylane.grand_livre --last-month` (Cloud Run Job).
+
+---
+
+## Pipeline Grand Livre COMPLET — `ledger_full` (Lot A, 2026-06-23)
+
+Frère du pipeline ci-dessus, mais **tous les comptes** (pas seulement loyer/charges/taxe) en **daily incrémental**. Objectif : tout le grand livre dans BQ pour analyses financières + futur rapprochement (Lot B = factures). Cible archi = remplacer le mensuel à terme (Phase 2), pour l'instant **séparé** (zéro risque). Cf. ADR `Archides/docs/decisions.md` 2026-06-23.
+
+**Architecture** :
+- Script CLI : `pennylane/ledger_full.py` (réutilise `PennylaneGLClient` de `grand_livre.py`)
+- Cloud Run Job : `ledger-full-pull` (image partagée `booking-pipeline`, args `-m,pennylane.ledger_full`)
+- Scheduler : `ledger-full-pull-daily` à **6h Paris** (cron `0 6 * * *`, hors cascade 2h)
+- Table BQ cible : `pennylane.raw_ledger_lines` (partition MONTH sur `date`, cluster `account_number`, MERGE sur `ledger_entry_line_id`)
+
+**Incrémental** : l'API v2 ignore les filtres de date mais respecte `sort=-date`. On tire en DESC, on garde `date >= from_date`, early-stop sous la borne (`EARLY_STOP_BUFFER=200`). ⚠️ **Curseur ancré sur `today − 45j`** (`OVERLAP_DAYS`, re-scan glissant pour corrections antidatées), **PAS `MAX(date)`** : des écritures sont datées dans le futur (versements/prévisions) → elles gonfleraient le curseur mais restent captées car en tête du scan DESC.
+
+**Schéma** : `ledger_entry_line_id, ledger_entry_id, date, journal_id, account_id, account_number, label` (note de ligne), `debit, credit, lettered_line_ids` (ids lettrage, REPEATED), `created_at, updated_at, ingested_at`. **Pas** de nom de compte ni de libellé d'écriture parente (enrichissement `get_account`/`get_entry` **déféré** — N+1 trop coûteux sur le ledger complet ; à brancher Phase 2 via une référence `ledger_accounts`).
+
+**Validation (2026-06-23)** : avril, 3 comptes, vs `raw_grand_livre` → **219/219 communes identiques au centime**. Écart = timing (écritures antidatées avril ajoutées en juin + corrections re-keyées Pennylane).
+
+**Limites** : (1) ids supprimés côté Pennylane = orphelins dans la table (MERGE ne supprime jamais — dbt filtrera l'état courant) ; (2) labels comptes/écritures déférés (Phase 2) ; (3) backfill historique pas encore lancé → la table contient avril→futur ; pour l'historique complet : `python -m pennylane.ledger_full --from-date 2025-01-01` (one-shot).
+
+**Run** : daily auto `python -m pennylane.ledger_full` (overlap 45j). Bootstrap/backfill : `--from-date YYYY-MM-DD`. Dry-run : `--dry-run`.
 
 ---
 
