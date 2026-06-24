@@ -283,7 +283,7 @@ Frère du pipeline ci-dessus, mais **tous les comptes** (pas seulement loyer/cha
 
 **Validation (2026-06-23)** : avril, 3 comptes, vs `raw_grand_livre` → **219/219 communes identiques au centime**. Écart = timing (écritures antidatées avril ajoutées en juin + corrections re-keyées Pennylane).
 
-**Limites** : (1) ids supprimés côté Pennylane = orphelins dans la table (MERGE ne supprime jamais — dbt filtrera l'état courant) ; (2) labels comptes/écritures déférés (Phase 2) ; (3) backfill historique pas encore lancé → la table contient avril→futur ; pour l'historique complet : `python -m pennylane.ledger_full --from-date 2025-01-01` (one-shot).
+**Limites** : (1) ids supprimés côté Pennylane = orphelins dans la table (MERGE ne supprime jamais — dbt filtrera l'état courant) ; (2) labels comptes/écritures déférés (Phase 2) ; (3) **backfill 2026 lancé le 2026-06-24** (`--from-date 2026-01-01`, 76 892 lignes) → la table couvre **2026-01-01 → futur** ; pour 2025 aussi : `python -m pennylane.ledger_full --from-date 2025-01-01` (one-shot, pas encore fait).
 
 **Run** : daily auto `python -m pennylane.ledger_full` (overlap 45j). Bootstrap/backfill : `--from-date YYYY-MM-DD`. Dry-run : `--dry-run`.
 
@@ -305,7 +305,7 @@ Frère de `ledger_full` (Lot A) mais sur les **factures** : endpoints Pennylane 
 
 **Validation (2026-06-24)** : backfill `--from-date 2024-07-01` → 2 383 factures clients (jusqu'à 2024-07-09) + 15 650 fournisseurs. **100% portent un `ledger_entry_id`**. Re-run prod idempotent.
 
-**Limites** : (1) jointure customer→`raw_ledger_lines` partielle tant que Lot A pas backfillé (`ledger_full --from-date 2025-01-01`) ; (2) `remaining` fournisseur négatif (convention signe Pennylane = dette) + loyers futurs non échus (max 2026-09-01) → gestion signe/échéance = sujet dbt Phase 2 ; (3) paiements > 90j ratés (rare).
+**Limites** : (1) jointure customer→`raw_ledger_lines` complète sur **2026** (Lot A backfillé 2026-06-24) — antérieur à 2026 partiel tant que `ledger_full --from-date 2025-01-01` pas lancé ; (2) `remaining` fournisseur négatif (convention signe Pennylane = dette) + loyers futurs non échus (max 2026-09-01) → gestion signe/échéance = sujet dbt Phase 2 ; (3) paiements > 90j ratés (rare).
 
 **Run** : daily auto `python -m pennylane.invoices_full` (les 2 types, overlap 90j). Backfill : `--from-date 2024-07-01`. Un seul type : `--kind customer`. Dry-run : `--dry-run`.
 
