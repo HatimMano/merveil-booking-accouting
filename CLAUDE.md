@@ -154,6 +154,7 @@ Jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
 | `lettering-sim-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `lettering-sim` (simulation lettrage Airbnb+Booking sur 60j) |
 | `grand-livre-pull-monthly` | 5 du mois à 7h Paris ✅ | Cloud Run **Job** `grand-livre-pull` (pull comptes 6041/6042/60472 du mois précédent → `pennylane.raw_grand_livre`) |
 | `ledger-full-pull-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `ledger-full-pull` (grand livre COMPLET tous comptes, daily incr. overlap 45j → `pennylane.raw_ledger_lines`) — cf. Lot A ci-dessous |
+| `invoices-full-pull-daily` | Tous les jours à 6h15 Paris ✅ | Cloud Run **Job** `invoices-full-pull` (factures clients + fournisseurs, daily incr. overlap 90j → `pennylane.raw_{customer,supplier}_invoices`) — cf. Lot B ci-dessous |
 
 Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt).
 
@@ -288,7 +289,32 @@ Frère du pipeline ci-dessus, mais **tous les comptes** (pas seulement loyer/cha
 
 ---
 
+## Pipeline Factures — `invoices_full` (Lot B, 2026-06-24)
+
+Frère de `ledger_full` (Lot A) mais sur les **factures** : endpoints Pennylane v2 `/customer_invoices` + `/supplier_invoices`. Objectif : faire passer la page Finances du prisme PMS (Mews, DSO faux) au prisme **comptable réel** (DSO trésorerie, vrais impayés tous canaux, lettrage). Pivot = `ledger_entry_id` (jointure directe sur `raw_ledger_lines` du Lot A). Cf. ADR `Archides/docs/decisions.md` 2026-06-24.
+
+**Architecture** :
+- Script CLI : `pennylane/invoices_full.py` (réutilise `PennylaneGLClient` de `grand_livre.py`, param `--kind customer|supplier|both`)
+- Cloud Run Job : `invoices-full-pull` (image partagée `booking-pipeline`, command `python`, args `-m,pennylane.invoices_full`, SA `booking-pipeline-sa`, secret `PENNYLANE_TOKEN`)
+- Scheduler : `invoices-full-pull-daily` à **6h15 Paris** (cron `15 6 * * *`, juste après le ledger Lot A 6h)
+- Tables BQ cibles : `pennylane.raw_customer_invoices` + `raw_supplier_invoices` (partition MONTH sur `date`, cluster `paid`, MERGE sur `id`)
+
+**Incrémental** : l'API v2 n'autorise `sort` que sur `id`/`date` (PAS `updated_at` → HTTP 400). On tire en `sort=-date` DESC, garde `date >= from_date`, early-stop sous la borne (`EARLY_STOP_BUFFER=200`). ⚠️ `OVERLAP_DAYS=90` (vs 45 pour le ledger) : un paiement décale plus dans le temps que l'écriture → fenêtre plus large pour capter le passage "payé".
+
+**Schéma** (en-têtes scalaires) : `id, ledger_entry_id, party_id` (= customer/supplier id), `invoice_number, date, deadline, amount, tax, currency, currency_amount, status, paid, remaining_amount_with_tax, external_reference, label, created_at, updated_at, archived_at, ingested_at`. Nested `invoice_lines`/`payments`/`matched_transactions` **déférés** (non requis pour DSO/impayés/lettrage).
+
+**Validation (2026-06-24)** : backfill `--from-date 2024-07-01` → 2 383 factures clients (jusqu'à 2024-07-09) + 15 650 fournisseurs. **100% portent un `ledger_entry_id`**. Re-run prod idempotent.
+
+**Limites** : (1) jointure customer→`raw_ledger_lines` partielle tant que Lot A pas backfillé (`ledger_full --from-date 2025-01-01`) ; (2) `remaining` fournisseur négatif (convention signe Pennylane = dette) + loyers futurs non échus (max 2026-09-01) → gestion signe/échéance = sujet dbt Phase 2 ; (3) paiements > 90j ratés (rare).
+
+**Run** : daily auto `python -m pennylane.invoices_full` (les 2 types, overlap 90j). Backfill : `--from-date 2024-07-01`. Un seul type : `--kind customer`. Dry-run : `--dry-run`.
+
+---
+
 ## Changelog
+
+### 2026-06-24 — Lot B Factures (customer + supplier invoices → BQ)
+- Module `pennylane/invoices_full.py` + job `invoices-full-pull` + scheduler `invoices-full-pull-daily` (6h15 Paris). Tables `pennylane.raw_customer_invoices` (2 383) + `raw_supplier_invoices` (15 650), 100% `ledger_entry_id`. Backfill 2024-07-01. Découverte : `sort` API limité à `id`/`date` → overlap 90j sur `date`. Section "Pipeline Factures" + ADR `decisions.md` 2026-06-24.
 
 ### 2026-06-16 — Airbnb "Remboursement des frais d'annulation" → CREDIT 604610
 - Demande Philippe (mail) : Airbnb rembourse des frais d'annulation (RC : Emilia/Louise) → **crédit du compte 604610**. Fichiers `260609` / `260615 Import Airbnb.xlsx`.
