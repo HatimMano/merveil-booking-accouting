@@ -155,6 +155,7 @@ Jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
 | `grand-livre-pull-monthly` | 5 du mois à 7h Paris ✅ | Cloud Run **Job** `grand-livre-pull` (pull comptes 6041/6042/60472 du mois précédent → `pennylane.raw_grand_livre`) |
 | `ledger-full-pull-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `ledger-full-pull` (grand livre COMPLET tous comptes, daily incr. overlap 45j → `pennylane.raw_ledger_lines`) — cf. Lot A ci-dessous |
 | `invoices-full-pull-daily` | Tous les jours à 6h15 Paris ✅ | Cloud Run **Job** `invoices-full-pull` (factures clients + fournisseurs, daily incr. overlap 90j → `pennylane.raw_{customer,supplier}_invoices`) — cf. Lot B ci-dessous |
+| `bank-accounts-pull-daily` | Tous les jours à 6h30 Paris ✅ | Cloud Run **Job** `bank-accounts-pull` (soldes bancaires réels, snapshot append-only → `pennylane.raw_bank_accounts`) — cf. Trésorerie ci-dessous |
 
 Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt).
 
@@ -266,6 +267,16 @@ Module séparé du `booking-pipeline` (qui POSTe) — ici on **PULL** le grand l
 **Run mensuel auto** : `python -m pennylane.grand_livre --last-month` (Cloud Run Job).
 
 ---
+
+## Trésorerie — `bank_accounts` (2026-06-25)
+
+Soldes bancaires **réels** par compte via l'endpoint Pennylane `/bank_accounts` (Pennylane connecté aux banques → solde live, ≠ solde comptable reconstitué). Cf. ADR `Archides/docs/decisions.md` 2026-06-25.
+
+- Script CLI : `pennylane/bank_accounts.py` (réutilise `PennylaneGLClient`). Snapshot **append-only** : 1 ligne / compte / run → `pennylane.raw_bank_accounts` (solde, nom, `ledger_account_id` = lien transactions, `updated_at` synchro banque).
+- Cloud Run Job : `bank-accounts-pull` (image partagée `booking-pipeline`, args `-m,pennylane.bank_accounts`, secret `pennylane-token`).
+- Scheduler : `bank-accounts-pull-daily` 6h30 Paris.
+- **Aval dbt** : `stg_pennylane__bank_accounts` (dernier snapshot) → `dashboard_finance.dash_finance_treasury` (solde + seuil seed `treasury_thresholds` + statut + `montant_a_virer`) → trigger `treasury_low` (digest daily, action-engine).
+- 11 comptes remontés ; 6 actifs whitelistés dans le seed seuils (placeholders à calibrer). Dormants (BNP/HSBC/Spendesk à 0) hors seed.
 
 ## Pipeline Grand Livre COMPLET — `ledger_full` (Lot A, 2026-06-23)
 
