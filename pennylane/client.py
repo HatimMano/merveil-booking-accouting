@@ -1,7 +1,6 @@
 """PennyLane API client — posts accounting entries via the v2 API."""
 
 import logging
-import time
 from typing import List, Optional
 
 import requests
@@ -119,7 +118,9 @@ class PennyLaneClient:
                 },
             }
 
-        response = self._session.post(f"{_BASE_URL}/ledger_entries", json=payload)
+        # timeout : un hang réseau sans limite = requête tuée par Cloud Run en
+        # plein run (= le scénario crash mi-run que le journal protège).
+        response = self._session.post(f"{_BASE_URL}/ledger_entries", json=payload, timeout=30)
         response.raise_for_status()
         raw = response.json()
 
@@ -148,20 +149,10 @@ class PennyLaneClient:
             "raw":                 raw,
         }
 
-    def post_batches(
-        self,
-        batches: List[List[AccountingEntry]],
-        dry_run: bool = False,
-        delay: float = 0.5,
-    ) -> List[dict]:
-        """Post multiple entry batches sequentially. Returns one result per batch."""
-        results = []
-        for i, batch in enumerate(batches, 1):
-            logger.info("Posting batch %d/%d (%d lines)...", i, len(batches), len(batch))
-            results.append(self.post_ledger_entry(batch, dry_run=dry_run))
-            if not dry_run and i < len(batches):
-                time.sleep(delay)
-        return results
+    # NOTE: post_batches() a été supprimé (2026-07-02) — la boucle de POST vit
+    # dans orchestrator.run_pipeline(), journalisée batch par batch dans
+    # pennylane.posting_journal (write-ahead). Poster en masse sans journal
+    # est exactement le chemin qui produisait des doublons au replay.
 
     # ------------------------------------------------------------------
     # Internal helpers

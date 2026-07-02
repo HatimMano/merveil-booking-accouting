@@ -13,7 +13,10 @@ Body attendu (POST /process) :
         "dry_run":   false,           // optionnel
         "test":      false,           // optionnel (préfixe [TEST])
         "bq_only":   false,           // optionnel (skip PennyLane)
-        "run_id":    "uuid"           // optionnel (auto-généré)
+        "run_id":    "uuid",          // optionnel (auto-généré)
+        "force":     false            // optionnel — ignore le journal d'idempotence
+                                      // en lecture (re-poste TOUT). Uniquement après
+                                      // nettoyage manuel Pennylane d'un état incertain.
     }
 
 Le serveur ne fait que :
@@ -78,6 +81,7 @@ def process():
     test_mode = bool(body.get("test", False))
     dry_run   = bool(body.get("dry_run", False))
     bq_only   = bool(body.get("bq_only", False))
+    force     = bool(body.get("force", False))
     date_str  = body.get("date")
     run_id    = body.get("run_id") or str(uuid.uuid4())
 
@@ -97,8 +101,8 @@ def process():
         return jsonify({"error": f"Invalid date format '{date_str}'. Expected YYYY-MM-DD"}), 400
 
     logger.info(
-        "Processing request: run_id=%s folder_id=%s date=%s ota=%s bq_only=%s test_mode=%s dry_run=%s",
-        run_id, folder_id, date_str, ota, bq_only, test_mode, dry_run,
+        "Processing request: run_id=%s folder_id=%s date=%s ota=%s bq_only=%s test_mode=%s dry_run=%s force=%s",
+        run_id, folder_id, date_str, ota, bq_only, test_mode, dry_run, force,
     )
 
     try:
@@ -113,6 +117,7 @@ def process():
                 dry_run=dry_run,
                 bq_only=bq_only,
                 run_id=run_id,
+                force=force,
             )
     except Exception as exc:
         logger.exception("Pipeline failed: %s", exc)

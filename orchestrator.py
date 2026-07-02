@@ -8,8 +8,10 @@ Fonction unique `run_pipeline(source, ...)` qui consomme n'importe quelle `Sourc
   4. Génère les écritures comptables équilibrées par batch
   5. Valide montants + balance globale
   6. Bloque sur anomalie bloquante (rien posté)
-  7. Poste dans PennyLane (sauf dry_run / bq_only)
-  8. Trace dans BigQuery `pennylane.raw_postings`
+  7. Poste dans PennyLane batch par batch, journalisé write-ahead dans
+     `pennylane.posting_journal` (intent → POST → trace → posted) : un replay
+     skippe les batches `posted`, se bloque sur un `intent` orphelin
+  8. Trace dans BigQuery `pennylane.raw_postings` (par batch, fatal)
   9. Archive le fichier source dans Drive (si Source basée Drive)
 
 Le orchestrator n'a aucune logique OTA-spécifique : tout passe par les
@@ -18,16 +20,18 @@ Le orchestrator n'a aucune logique OTA-spécifique : tout passe par les
 
 import logging
 import os
+import time
 from datetime import date
 from typing import Any
 
 from accounting.entries import generate_entries
+from bigquery.journal import PHASE_INTENT, PHASE_POSTED, read_journal, run_mode, write_phase
 from bigquery.postings import build_synthetic_results, write_postings
 from drive.client import DriveClient
 from lookups.mews import lookup_bills
 from pennylane.client import PennyLaneClient
 from sources.base import Source
-from validators.anomalies import Severity, check_balance, validate_reservation_amounts
+from validators.anomalies import Anomaly, Severity, check_balance, validate_reservation_amounts
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +44,14 @@ def run_pipeline(
     dry_run: bool = False,
     bq_only: bool = False,
     run_id: str = "",
+    force: bool = False,
 ) -> dict[str, Any]:
-    """Orchestre le pipeline complet pour une source donnée. Retourne le résumé du run."""
+    """Orchestre le pipeline complet pour une source donnée. Retourne le résumé du run.
+
+    `force=True` ignore le journal en LECTURE (tout est re-posté) — à utiliser
+    uniquement après nettoyage manuel dans Pennylane d'un état incertain.
+    Les phases restent écrites au journal même en force.
+    """
 
     # ── Step 1: fetch via la Source ────────────────────────────────────────
     src_result = source.fetch(processing_date)
@@ -132,31 +142,89 @@ def run_pipeline(
             if batch:
                 batch[0].label = "[TEST] " + batch[0].label
 
-    # ── Step 9: post PennyLane (ou synthetic results si bq_only) ───────────
-    if bq_only:
-        pl_results = build_synthetic_results(per_batch_entries)
-        logger.info("bq_only=True — PennyLane skipped, writing trace to BQ only.")
+    # ── Step 9-10: POST + trace, batch par batch, journalisés (write-ahead) ─
+    # Séquence par batch : intent (fatal) → POST → trace raw_postings (fatal)
+    # → posted (fatal). `posted` ⇒ tracé. Un `intent` sans `posted` au replay
+    # = POST au résultat inconnu → run bloqué, rien n'est re-posté aveuglément.
+    mode = run_mode(test_mode, bq_only)
+    batch_keys = _batch_keys(src_result.batches)
+
+    if force:
+        logger.warning("force=True — journal ignoré en lecture : TOUS les batches seront (re)postés.")
+        journal_state: dict[str, str] = {}
     else:
-        pl_results = _get_pennylane_client().post_batches(per_batch_entries)
-        logger.info(
-            "Done — %d reservations, %d warnings, balance_ok=%s, %d batches posted to PennyLane",
-            len(all_processed), len(warnings), balance_ok, len(pl_results),
+        journal_state = read_journal(
+            ota=source.name,
+            source_file=src_result.source_file,
+            file_hash=src_result.file_hash,
+            mode=mode,
         )
 
-    # ── Step 10: BQ trace (non-fatal si plante) ────────────────────────────
+    uncertain = [k for k in batch_keys if journal_state.get(k) == PHASE_INTENT]
+    if uncertain:
+        return _handle_uncertain_journal(
+            drive_client, src_result, source.name, uncertain, mode,
+        )
+
+    client = None if bq_only else _get_pennylane_client()
+    posted_count = 0
+    skipped_count = 0
     bq_rows_written = 0
-    try:
-        bq_rows_written = write_postings(
+    total = len(per_batch_entries)
+
+    for i, batch in enumerate(per_batch_entries):
+        key = batch_keys[i]
+        if journal_state.get(key) == PHASE_POSTED:
+            logger.info("Batch %d/%d (key=%s) déjà posté — SKIP (journal).", i + 1, total, key)
+            skipped_count += 1
+            continue
+
+        label = batch[0].label if batch else None
+        journal_kwargs = dict(
+            ota=source.name,
+            source_file=src_result.source_file,
+            file_hash=src_result.file_hash,
+            batch_key=key,
+            batch_index=i,
+            mode=mode,
+            run_id=run_id,
+            label=label,
+            service_version=os.environ.get("K_REVISION") or os.environ.get("GIT_SHA"),
+        )
+
+        write_phase(phase=PHASE_INTENT, **journal_kwargs)
+
+        if bq_only:
+            result = build_synthetic_results([batch])[0]
+        else:
+            logger.info("Posting batch %d/%d (%d lines, key=%s)...", i + 1, total, len(batch), key)
+            result = client.post_ledger_entry(batch)
+
+        bq_rows_written += write_postings(
             run_id=run_id,
             ota=source.name,
             source_file=src_result.source_file,
-            per_batch_entries=per_batch_entries,
-            pl_results=pl_results,
+            per_batch_entries=[batch],
+            pl_results=[result],
             test_mode=test_mode,
             bq_only=bq_only,
+            first_batch_index=i,
         )
-    except Exception as exc:
-        logger.exception("BQ trace write failed (non-fatal): %s", exc)
+
+        write_phase(
+            phase=PHASE_POSTED,
+            ledger_entry_id=result.get("ledger_entry_id"),
+            **journal_kwargs,
+        )
+        posted_count += 1
+
+        if not bq_only and i < total - 1:
+            time.sleep(0.5)
+
+    logger.info(
+        "Done — %d reservations, %d warnings, balance_ok=%s, %d batch(es) posted, %d skipped (journal)",
+        len(all_processed), len(warnings), balance_ok, posted_count, skipped_count,
+    )
 
     # ── Step 11: archive Drive (seulement si Source basée Drive) ───────────
     archive_date = f"{file_date} [BQ-ONLY]" if bq_only else file_date
@@ -171,13 +239,65 @@ def run_pipeline(
         "warnings":                 len(warnings),
         "blocking":                 0,
         "balance_ok":               balance_ok,
-        "pennylane_batches_posted": 0 if bq_only else len(pl_results),
+        "pennylane_batches_posted": 0 if bq_only else posted_count,
+        "batches_skipped_journal":  skipped_count,
         "bq_rows_written":          bq_rows_written,
         "bq_only":                  bq_only,
     }
 
 
 # ── Helpers internes ───────────────────────────────────────────────────────
+
+def _batch_keys(batches: list) -> list[str]:
+    """Clé sémantique de chaque batch pour le journal d'idempotence.
+
+    Booking : `payout_id` ; Airbnb : `payout_reference`. Fallback positionnel
+    si une future source n'a ni l'un ni l'autre (moins robuste à un
+    changement d'ordre du parser — préférer un identifiant métier).
+    """
+    keys = []
+    for i, b in enumerate(batches):
+        key = getattr(b, "payout_id", None) or getattr(b, "payout_reference", None) or f"index-{i}"
+        keys.append(str(key))
+    if len(set(keys)) != len(keys):
+        # Deux batches avec la même clé → le skip du journal deviendrait ambigu.
+        raise ValueError(f"Batch keys non uniques ({keys}) — journal d'idempotence impossible.")
+    return keys
+
+
+def _handle_uncertain_journal(drive, src_result, source_name: str, uncertain: list, mode: str) -> dict:
+    """Un `intent` sans `posted` = un POST Pennylane au résultat inconnu.
+
+    On ne re-poste RIEN (risque de doublon comptable) et on n'archive PAS le
+    fichier (il doit rester pour le re-run post-résolution). Résolution
+    manuelle documentée dans bigquery/journal.py (vérifier dans Pennylane par
+    date+label, puis INSERT `posted` manuel OU nettoyage + re-run force=true).
+    """
+    msg = (
+        f"{len(uncertain)} batch(es) en état INCERTAIN dans le journal "
+        f"(intent sans posted) : {uncertain}. Un POST Pennylane a peut-être "
+        f"abouti sans trace (crash mi-run). RIEN n'a été posté sur ce run. "
+        f"Vérifier dans Pennylane (date + label, cf. pennylane.posting_journal) "
+        f"puis résoudre — procédure dans bigquery/journal.py."
+    )
+    logger.error("JOURNAL BLOQUANT [%s/%s] : %s", source_name, src_result.source_file, msg)
+    anomaly = Anomaly(
+        type="JOURNAL_UNCERTAIN_STATE",
+        severity=Severity.BLOCKING,
+        message=msg,
+        source_file=src_result.source_file,
+        reservation_ref=None,
+        details={"uncertain_batch_keys": uncertain, "mode": mode},
+    )
+    # Sheet d'anomalie dans le dossier RACINE (pas d'archive : le fichier reste).
+    if src_result.drive_folder_id:
+        _post_anomaly_sheet(drive, src_result.drive_folder_id, [anomaly], source_name)
+    return {
+        "status":            "journal_blocked",
+        "uncertain_batches": uncertain,
+        "message":           msg,
+    }
+
 
 def _archive_run(drive, folder_id: str, date_str: str, file_ids: list, anomalies: list, source_name: str) -> None:
     """Crée le sous-dossier Archive, déplace les fichiers source, crée la sheet d'anomalies.

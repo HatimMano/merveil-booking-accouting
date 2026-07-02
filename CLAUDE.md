@@ -11,7 +11,7 @@ Triggered via HTTP POST by Cloud Scheduler (or manually).
 - **Endpoint**: `POST /process`
 - **Deploy**: `gcloud run services update --image eu.gcr.io/merveil-data-warehouse/booking-pipeline --region europe-west1 --project merveil-data-warehouse`
   - Always push to GitHub first — the image is built from GitHub source.
-- **Secret**: `PENNYLANE_TOKEN` via Secret Manager
+- **Secret**: `PENNYLANE_TOKEN` via Secret Manager — secret `pennylane-token`, monté en `:latest` (depuis 2026-06-30 ; était épinglé sur une version fixe → rotations non prises en compte). Pour rotation : `echo -n "<token>" | gcloud secrets versions add pennylane-token --data-file=-` puis relancer (pas de redeploy). ⚠️ Le token PennyLane doit avoir le **scope écriture** : un token read-only laisse passer les GET mais renvoie **403 Forbidden sur POST `/ledger_entries`** (corps vide → 400 « champs manquants », corps complet → 403 = pas de droit d'écriture). Incident 2026-06-30 : token régénéré sans cocher l'écriture → pipeline bloquée au batch 1/32 (rien posté, pas d'état partiel).
 
 ## Request format
 ```json
@@ -22,7 +22,10 @@ Triggered via HTTP POST by Cloud Scheduler (or manually).
   "dry_run": true,           // optional — validate, no PennyLane post, no BQ write, no archiving
   "test": true,              // optional — post with [TEST] prefix
   "bq_only": true,           // optional — skip PennyLane, write trace to BQ only (validation mode)
-  "run_id": "uuid"           // optional — auto-generated UUID per run if absent
+  "run_id": "uuid",          // optional — auto-generated UUID per run if absent
+  "force": false             // optional — ignore le journal d'idempotence en LECTURE
+                             // (re-poste TOUT). Uniquement après nettoyage manuel
+                             // Pennylane d'un état incertain. Les phases restent journalisées.
 }
 ```
 
@@ -191,6 +194,29 @@ Toujours commiter/pusher le mapping avant de déployer.
 - `gcloud run services update-traffic` does NOT deploy a new image — always use `update --image`
 - Le mapping `CodeAppart_Compta.csv` doit être mis à jour et redéployé si un nouvel appartement Booking apparaît (`MAPPING_NOT_FOUND` = anomalie bloquante)
 
+## ⭐ Journal write-ahead — `pennylane.posting_journal` (idempotence rejeu, 2026-07-02)
+
+**Problème résolu** : l'idempotence reposait sur l'archive Drive (déplacée APRÈS tous les POST) et la trace `raw_postings` était écrite en bulk final non-fatal → crash mi-run (timeout, OOM, réseau) = batches postés dans Pennylane sans aucune trace, fichier toujours en place → le run suivant (lundi 8h auto ou replay manuel) **re-postait tout** = écritures dupliquées, sans DELETE possible (API v2). Pennylane n'a **aucune idempotence native** (doc officielle : les doublons créent des doublons).
+
+**Mécanique** (`bigquery/journal.py` + boucle dans `orchestrator.py`) — séquence PAR batch :
+1. INSERT `phase='intent'` dans `posting_journal` (**fatal** — on ne poste pas d'argent sans trace)
+2. POST Pennylane (timeout 30 s)
+3. INSERT trace `raw_postings` du batch (**fatal**)
+4. INSERT `phase='posted'` + `ledger_entry_id` (**fatal**) → `posted` ⇒ tracé, garanti par l'ordre
+
+**Clé du journal** : `(ota, source_file, file_hash md5, batch_key, mode)`.
+- `batch_key` = `payout_id` Booking / `payout_reference` Airbnb (sémantique, robuste à un changement d'ordre du parser ; unicité vérifiée, run refusé sinon).
+- `file_hash` : un fichier **corrigé** ré-uploadé (même nom, contenu différent) = nouveau journal → re-posté normalement (cas replay Iavotsoa).
+- `mode` (`live`/`test`/`bq_only`) : les runs de validation ne shadowent jamais les runs réels.
+
+**Au replay** : batch `posted` → **SKIP** ; batch `intent` sans `posted` = POST au résultat inconnu → **run `journal_blocked`** : rien n'est re-posté, fichier NON archivé, sheet d'anomalie `JOURNAL_UNCERTAIN_STATE` créée dans le dossier Drive racine. Résolution manuelle (procédure complète en docstring de `bigquery/journal.py`) : vérifier dans Pennylane par date+label → si l'écriture existe, INSERT `posted` manuel ; sinon nettoyer Pennylane et relancer avec `{"force": true}`.
+
+**Table** : `pennylane.posting_journal` (append-only, DDL dans `bigquery/create_posting_journal.sql`). Aucun impact sur les consommateurs de `raw_postings` (`dash_finance_postings`, `sem_finance`) — table séparée.
+
+**Timeouts associés (2026-07-02)** : Cloud Run service 120 s → **600 s** (la cause n°1 de crash mi-run était le kill à 120 s sur gros fichier), scheduler `attemptDeadline` 180 s → **600 s**, POST requests `timeout=30`.
+
+**Tests** : `tests/test_orchestrator_journal.py` (8 tests — nominal, replay total/partiel, incertain bloquant, crash simulé + replay, force, bq_only, clés dupliquées). E2E validé contre BQ réel le 2026-07-02 (run 1 poste 3 batches synthétiques, run 2 skippe 3/3).
+
 ## BQ trace — `pennylane.raw_postings` (chantier 1 rapprochement, 2026-05-06)
 Table append-only qui capture chaque ligne d'écriture générée par le pipeline (= 1 ledger_entry_line PennyLane par row). Pivot pour le rapprochement futur avec `mews_raw.raw_bills`.
 
@@ -201,7 +227,7 @@ Table append-only qui capture chaque ligne d'écriture générée par le pipelin
 **Modes** :
 - Run normal → `ledger_entry_id`/`ledger_entry_line_id` remplis avec les vrais IDs PennyLane (récupérés depuis la réponse API par alignement positionnel `entries[i] ↔ result.ledger_entry_lines[i]`)
 - `bq_only=true` → POST PennyLane skippé, BQ écrit avec `ledger_entry_id=NULL` et `ledger_entry_line_id=NULL`. Mode validation pour itérer sur le schéma sans risque comptable
-- BQ insert wrapped en `try/except` non-fatal (si BQ tombe après un POST PennyLane réussi, le pipeline ne re-pousse pas — log warning et continue)
+- ~~BQ insert non-fatal~~ → **FATAL depuis 2026-07-02** : la trace est écrite **par batch, juste après chaque POST** (plus de bulk final), et son échec stoppe le run. Le non-fatal d'avant est précisément ce qui rendait le rejeu aveugle (cf. section Journal write-ahead).
 
 **Champs `ref_piece` + `bill_id_mews` (chantier 2 — 2026-05-07)** : remplis automatiquement via `lookups/mews.py`. Signature `(ota_ref, gross)` : le gross sert au matching par proximité de montant (= plus robuste que "Closed prioritaire" qui choisissait parfois un bill annexe REBATE au lieu du bill principal chambre, cas Rachel Ward 24618). Tie-breakers : Closed > consumed récent. Filtre `having abs(sum) >= 1` pour ignorer les bills techniques.
 

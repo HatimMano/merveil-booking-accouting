@@ -1,5 +1,6 @@
 """Source Airbnb — lit l'export Excel mensuel Airbnb depuis Drive."""
 
+import hashlib
 import logging
 from datetime import date
 from pathlib import Path
@@ -70,6 +71,7 @@ class AirbnbDriveSource(Source):
             source_file=xlsx_meta["name"],
             archive_file_ids=[xlsx_meta["id"]],
             drive_folder_id=self.folder_id,
+            file_hash=hashlib.md5(local_xlsx.read_bytes()).hexdigest(),
         )
 
     def enrich_anomalies(self, result: SourceFetchResult) -> None:

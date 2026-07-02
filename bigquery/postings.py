@@ -37,6 +37,7 @@ def _build_rows(
     service_version: Optional[str],
     per_batch_entries: List[List[AccountingEntry]],
     pl_results: List[dict],
+    first_batch_index: int = 0,
 ) -> List[dict]:
     """
     Flatten batches × entries × PennyLane line ids into BQ rows.
@@ -51,7 +52,7 @@ def _build_rows(
         )
 
     rows: List[dict] = []
-    for batch_index, (entries, result) in enumerate(zip(per_batch_entries, pl_results)):
+    for batch_index, (entries, result) in enumerate(zip(per_batch_entries, pl_results), start=first_batch_index):
         ledger_entry_id = result.get("ledger_entry_id")
         line_results = result.get("ledger_entry_lines") or [{}] * len(entries)
 
@@ -94,9 +95,14 @@ def write_postings(
     pl_results: List[dict],
     test_mode: bool = False,
     bq_only: bool = False,
+    first_batch_index: int = 0,
 ) -> int:
     """
-    Insert all entries from a run into pennylane.raw_postings (append-only).
+    Insert entries into pennylane.raw_postings (append-only).
+
+    Depuis 2026-07-02 l'orchestrateur appelle cette fonction batch par batch,
+    juste après chaque POST Pennylane (`first_batch_index` = position réelle
+    du batch dans le run, pour garder la sémantique de `batch_index`).
 
     Returns the number of rows inserted. Raises on insert errors so the caller
     can decide whether to alert / retry.
@@ -121,6 +127,7 @@ def write_postings(
         service_version=service_version,
         per_batch_entries=per_batch_entries,
         pl_results=pl_results,
+        first_batch_index=first_batch_index,
     )
 
     client = bigquery.Client(project=_PROJECT)

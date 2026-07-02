@@ -25,6 +25,7 @@ class SourceFetchResult:
     source_file: str                               # libellé tracé en BQ (= nom du fichier ou requête)
     archive_file_ids: list = field(default_factory=list)  # IDs Drive à déplacer dans Archive (vide si non-Drive)
     drive_folder_id: str = ""                      # Dossier Drive racine (vide si la source n'utilise pas Drive)
+    file_hash: str = ""                            # md5 du contenu source — clé du journal d'idempotence
 
 
 class Source(ABC):
