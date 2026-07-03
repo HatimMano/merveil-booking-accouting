@@ -121,6 +121,13 @@ After a successful real run:
 `dry_run=true` → no posting, no archiving.
 `test=true` → posts with `[TEST]` prefix, no archiving.
 
+## Gardes anomalies ajoutées 2026-07-03 (audit, rev 00072)
+- **`NET_DERIVED`** (WARNING, 1/fichier) : fichiers Booking « Paid Online » sans colonne Net → net dérivé (`Amount+Commission+Charge+CityTax`). L'anomalie porte compte + total dérivé — **à recouper avec le montant du virement réel** (le check Sum(Net) est tautologique pour ces lignes).
+- **`CITY_TAX_POSITIVE`** (WARNING, 1/résa) : convention = city_tax stockée ≤ 0 (Airbnb toujours 0). Une valeur positive inverse le calcul `gross_excl_city_tax = amount + city_tax`. WARNING et pas BLOCKING : un avoir légitime ne doit pas bloquer le run ; l'inversion systématique reste couverte par le sanity check anti-décalage BLOCKING du parser.
+
+## Tests (réécrits 2026-07-03)
+`tests/test_accounting.py` : assertions re-dérivées de la logique prod (les anciennes codaient la structure pré-refacto 2026-04-13 → 8 échecs pour de mauvaises raisons, zéro filet). Couvre les 2 configs prod (Booking `per_reservation_fees=True` + comm adjustment 401 ; Airbnb agrégé + cancellation fees 604610), l'**invariant débit=crédit** sur chaque scénario, refunds, bill_lookup, clé mapping normalisée. ⚠ Les kwargs prod y sont dupliqués sciemment depuis `sources/*.py` : si la config prod change, les tests DOIVENT casser. Suite complète : `python3 -m pytest tests/` → 62 tests. Pas de CI — à lancer avant tout deploy.
+
 ## Anomaly severity
 | Severity | Behavior |
 |---|---|
