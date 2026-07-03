@@ -201,3 +201,24 @@ class TestCheckBalance:
         )
         assert result is not None
         assert result.type == AnomalyType.BALANCE_ERROR
+
+
+# ---------------------------------------------------------------------------
+# city_tax positive (garde ajoutée 2026-07-03, audit finding)
+# ---------------------------------------------------------------------------
+
+class TestCityTaxPositive:
+    def test_positive_city_tax_flagged_warning(self):
+        """Convention : city_tax stockée <= 0. Positive = calcul gross inversé."""
+        r = make_reservation(city_tax=Decimal("20.80"), net=Decimal("469.02"))
+        anomalies = validate_reservation_amounts(r)
+        hits = [a for a in anomalies if a.type == AnomalyType.CITY_TAX_POSITIVE]
+        assert len(hits) == 1
+        assert hits[0].severity == Severity.WARNING
+
+    def test_negative_or_zero_city_tax_ok(self):
+        assert not [a for a in validate_reservation_amounts(make_reservation())
+                    if a.type == AnomalyType.CITY_TAX_POSITIVE]
+        r0 = make_reservation(city_tax=Decimal("0"), net=Decimal("448.22"))
+        assert not [a for a in validate_reservation_amounts(r0)
+                    if a.type == AnomalyType.CITY_TAX_POSITIVE]

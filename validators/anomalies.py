@@ -33,6 +33,8 @@ class AnomalyType:
     COMMISSION_RATE_HIGH = "COMMISSION_RATE_HIGH"
     COMMISSION_RATE_LOW = "COMMISSION_RATE_LOW"
     BALANCE_ERROR = "BALANCE_ERROR"
+    NET_DERIVED = "NET_DERIVED"
+    CITY_TAX_POSITIVE = "CITY_TAX_POSITIVE"
 
 
 class Severity:
@@ -126,6 +128,26 @@ def validate_reservation_amounts(reservation) -> List[Anomaly]:
     """
     anomalies: List[Anomaly] = []
     r = reservation
+
+    # Check: city_tax est stockée NÉGATIVE par convention (Booking) ou nulle
+    # (Airbnb). Une valeur positive inverserait silencieusement le calcul
+    # gross_excl_city_tax = amount + city_tax dans entries.py (finding audit
+    # 2026-07). WARNING (pas BLOCKING) : aucun cas positif observé à ce jour,
+    # mais on ne peut pas exclure un avoir légitime — l'inversion systématique
+    # est déjà couverte par le sanity check anti-décalage BLOCKING du parser.
+    if r.city_tax > Decimal("0"):
+        anomalies.append(Anomaly(
+            type=AnomalyType.CITY_TAX_POSITIVE,
+            severity=Severity.WARNING,
+            message=(
+                f"City tax POSITIVE ({r.city_tax}€) pour la résa "
+                f"{r.reference_number} — convention attendue ≤ 0, le calcul du "
+                f"gross hors taxe est probablement inversé pour cette ligne"
+            ),
+            source_file=r.source_file,
+            reservation_ref=r.reference_number,
+            details={"city_tax": str(r.city_tax), "amount": str(r.amount)},
+        ))
 
     # Check: Net should equal Amount + Commission + Payment_charge + City_tax
     expected_net = r.amount + r.commission + r.payment_charge + r.city_tax

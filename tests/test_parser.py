@@ -170,3 +170,32 @@ class TestDirectoryParsing:
         # bad_filename.csv is blocked, 9999999- has non-EUR (blocked), 8888888- is empty
         # Valid: 3015679- (2 reservations), 3788679- (1 reservation)
         assert len(reservations) >= 3
+
+
+class TestNetDerived:
+    """Fichiers 'Paid Online' sans colonne Net : dérivation + anomalie WARNING
+    (garde ajoutée 2026-07-03, audit finding — le montant doit être recoupé
+    avec le virement réel)."""
+
+    def setup_method(self):
+        parser = BookingParser()
+        self.reservations, self.anomalies = parser.parse_file(
+            FIXTURES / "3015679-PAIDONLINE.csv"
+        )
+
+    def test_net_derived_from_components(self):
+        assert len(self.reservations) == 1
+        r = self.reservations[0]
+        # Net = Amount + Commission + Charge + CityTax
+        assert r.net == Decimal("544.60") - Decimal("89.05") - Decimal("7.33") - Decimal("20.80")
+
+    def test_net_derived_anomaly_emitted(self):
+        hits = [a for a in self.anomalies if a.type == "NET_DERIVED"]
+        assert len(hits) == 1
+        assert hits[0].severity == "WARNING"
+        assert hits[0].details["derived_count"] == 1
+
+    def test_no_anomaly_when_net_present(self):
+        parser = BookingParser()
+        _, anomalies = parser.parse_file(FIXTURES / "3015679-7oaOsO2VGKHbvBNQ.csv")
+        assert not [a for a in anomalies if a.type == "NET_DERIVED"]

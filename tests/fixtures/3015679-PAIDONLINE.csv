@@ -1,0 +1,2 @@
+Type,Reference number,Check-in,Checkout,Guest name,Reservation status,Currency,Payment status,City tax,Amount,Commission,Payment charge,Payout date,Payout ID
+Reservation,5600000001,Aug 28 2025,Sep 1 2025,Paid Online Guest,ok,EUR,paid_online,-20.80,544.60,-89.05,-7.33,Oct 1 2025,PAIDONLINE000000

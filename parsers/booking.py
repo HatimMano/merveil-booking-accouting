@@ -216,6 +216,9 @@ class BookingParser(OTAParser):
             ))
             return reservations, anomalies
 
+        derived_net_count = 0
+        derived_net_total = Decimal("0")
+
         for row_num, row in enumerate(data_rows, start=2):
             row_type = _get_cell(row, col_map, "Type")
             ref_num = _get_cell(row, col_map, "Reference number")
@@ -283,6 +286,8 @@ class BookingParser(OTAParser):
                 # "Paid Online" reservations omit the Net column entirely.
                 # Derive Net from the other fields (Net = Amount + fees + tax).
                 net = amount + commission + payment_charge + city_tax
+                derived_net_count += 1
+                derived_net_total += net
 
             # --- Validate currency ---
             currency = _get_cell(row, col_map, "Currency")
@@ -334,6 +339,33 @@ class BookingParser(OTAParser):
                 payout_date=payout_date,
             )
             reservations.append(reservation)
+
+        # Net dérivé (colonne absente du xlsx) : la dérivation peut dévier du Net
+        # Booking réel sans autre garde — le check Sum(Net) vs composants est
+        # tautologique pour ces lignes. 1 anomalie WARNING par fichier pour que
+        # le montant soit recoupé avec le virement bancaire (finding audit 2026-07).
+        if derived_net_count:
+            logger.warning(
+                "Net column absent for %d/%d reservation(s) in %s — derived "
+                "(total %.2f EUR), cross-check against the actual payout amount",
+                derived_net_count, len(reservations), filename, derived_net_total,
+            )
+            anomalies.append(Anomaly(
+                type=AnomalyType.NET_DERIVED,
+                severity=Severity.WARNING,
+                message=(
+                    f"Net absent du fichier pour {derived_net_count}/{len(reservations)} "
+                    f"résa(s) de {filename} — dérivé (Amount+Commission+Charge+Tax, "
+                    f"total {derived_net_total:.2f}€). À recouper avec le montant "
+                    f"du virement Booking."
+                ),
+                source_file=filename,
+                reservation_ref=None,
+                details={
+                    "derived_count": derived_net_count,
+                    "derived_total": str(derived_net_total),
+                },
+            ))
 
         return reservations, anomalies
 
