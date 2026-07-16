@@ -195,6 +195,16 @@ Toujours commiter/pusher le mapping avant de déployer.
 - **`tests/test_accounting.py` — 8 tests obsolètes** : ces tests datent d'avant la refacto du 13/04/2026 (`feat: Libellés frais Booking par réservation`) qui a éclaté le DEBIT 401BOOKING en une ligne par réservation au lieu d'une ligne agrégée par batch. Les assertions codent en dur l'ancienne structure (`entries[1].account == "401BOOKING"`, `len(entries) == 4` pour 1 résa, etc.). À mettre à jour pour refléter la structure actuelle (1 header 51105000 + 2 lignes par résa avec `per_reservation_fees=True`). 7 tests passent encore.
 - **Tests manquants sur l'orchestrator + Sources** : pas de tests unitaires sur `orchestrator.run_pipeline()` ni sur les classes `BookingDriveSource` / `AirbnbDriveSource`. À écrire en même temps que la mise à jour de `test_accounting.py`.
 
+## ⭐ Flux 2 (Mews Payments) DÉBLOQUÉ — exports webhook quotidiens (2026-07-16)
+
+Le blocage historique du flux 2 (« pas d'endpoint Mews pour les commissions/versements », visio 12/05) est **levé** : les **exports planifiés Mews** poussent chaque jour par **webhook** (Export target → webhook-gateway `/webhooks/mews-exports`) le **Payout report** (~2h : versements Adyen + document `Transactions` = commission réelle PAR paiement + `Transaction Identifier`) et le **Payment report** (~12h45 : ventilation frais commission/interchange/scheme + type carte). Intervalle « Last day », dédup au staging.
+
+- **Données en BQ** (parse SQL dbt, cf. ADR `decisions.md` 2026-07-16) : `staging.stg_mews_exports__payouts` / `__payout_transactions` / `__card_payments`.
+- **Jointures validées au centime** : `transaction_id` = `stg_mews__payments.identifier` (→ payment_id, bill_id, reservation_id, canal) ; sum(transactions) = payout net ET commission ; refunds inclus (négatifs, commission 0).
+- **Conséquence pour ce repo** : la future `MewsPaymentsSource` lira ces vues BQ (plus « bloqué côté commissions », plus de taux figés) → écritures par versement : DEBIT 511035 (net), DEBIT commissions Mews Payments (réelles), CREDIT 411<canal> par résa (gross). Pattern : `bq_only=true` en parallèle de la saisie comptable → revue Philippe → live. Remplace les 2-3h/5j de saisie manuelle du « Bilan Mews Payments ».
+- **Prérequis avant de coder** : quelques jours/semaines d'accumulation + `dash_finance_payouts` (réco versements ↔ paiements ↔ relevé BNP) pour valider les chiffres.
+- ⚠ Si une livraison webhook rate, Mews ne retente pas (trou 24h silencieux) → alerte de continuité à câbler.
+
 ## Known issues / notes
 - SA must have **Organizer** role on the Shared Drive to move files uploaded by others
 - `list_excel_files()` in `drive/client.py` also returns Google Sheets natively converted → filter by extension handled at download time
