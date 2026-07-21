@@ -133,3 +133,42 @@ def load_airbnb_mapping(path: Path) -> Dict[str, str]:
 
     logger.info("Loaded %d Airbnb mapping entries from %s", len(mapping), path)
     return mapping
+
+
+def load_apartment_comptable_map(path: Path) -> Dict[str, str]:
+    """
+    Load Mapping_appart_code.csv → {code_appart_complet: code_comptable}.
+
+    Example: {"P09-CAU28-2D": "CAU28-2D"}. Pivot du fallback Mews : l'apartment_code
+    Mews (complet, avec préfixe bâtiment P##-) est converti en code_comptable
+    (format des valeurs des mappings label→comptable) avant génération d'écritures.
+
+    File format (';'-separated): 4 title/header rows + 1 column-header row to skip.
+    col0 = Code Appartement, col2 = Code Comptable.
+    """
+    mapping: Dict[str, str] = {}
+
+    try:
+        content = path.read_bytes().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        content = path.read_bytes().decode("latin-1")
+
+    lines = content.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+    # Data starts at line 6 → index 5 (rows 1-4 titles, row 5 column headers).
+    for line in lines[5:]:
+        line = line.strip()
+        if not line:
+            continue
+
+        parts = line.split(";")
+        if len(parts) < 3:
+            continue
+
+        code_appart = parts[0].strip()
+        code_comptable = parts[2].strip()
+        if code_appart and code_comptable:
+            mapping[code_appart] = code_comptable
+
+    logger.info("Loaded %d apartment→comptable entries from %s", len(mapping), path)
+    return mapping

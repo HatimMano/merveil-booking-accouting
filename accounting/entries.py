@@ -81,6 +81,7 @@ def generate_entries(
     ota_label: str = "BOOKING",
     per_reservation_fees: bool = False,
     bill_lookup: Optional[Dict[str, Tuple[Optional[str], Optional[str]]]] = None,
+    mews_fallback: Optional[Dict[str, str]] = None,
 ) -> Tuple[List[AccountingEntry], List[Reservation], List[Anomaly]]:
     """
     Generate PennyLane accounting entries for a batch of reservations.
@@ -121,8 +122,23 @@ def generate_entries(
     valid_reservations: List[Reservation] = []
 
     # --- Step 1: resolve mapping for every reservation ---
+    mews_fallback = mews_fallback or {}
     for r in reservations:
         code_comptable = mapping.get(r.ref_appart) or mapping.get(_normalize_key(r.ref_appart))
+
+        # Fallback Mews : le libellé de l'annonce est absent du mapping (annonce
+        # OTA renommée). On résout via le code de confirmation, stable et connu
+        # de Mews. Le libellé reste primaire (99 % battle-tested) — ceci ne
+        # touche que les cas déjà voués au BLOCKING.
+        if code_comptable is None:
+            code_comptable = mews_fallback.get(r.reference_number)
+            if code_comptable is not None:
+                logger.info(
+                    "ref_appart '%s' absent du mapping — résolu via Mews "
+                    "(conf %s -> %s)",
+                    r.ref_appart, r.reference_number, code_comptable,
+                )
+
         if code_comptable is None:
             anomalies.append(Anomaly(
                 type=AnomalyType.MAPPING_NOT_FOUND,

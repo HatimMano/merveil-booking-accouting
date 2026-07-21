@@ -137,3 +137,73 @@ def lookup_bills(
         len(out), len(set(k[0] for k in seen)), matched, len(out) - matched,
     )
     return out
+
+
+# Résolution appart via Mews : code de confirmation OTA -> apartment_code.
+# Pivot : fct_reservations.channel_number == code de confirmation OTA.
+# Désambiguïse les collisions (même code sur 2 résas = guest ayant changé
+# d'appart, Mews annule+recrée) : résa non-annulée prioritaire, CI le plus récent.
+_RESOLVE_APT_QUERY = """
+WITH targets AS (
+    SELECT conf_code FROM UNNEST(@conf_codes) AS conf_code
+),
+ranked AS (
+    SELECT
+        fr.channel_number AS conf_code,
+        fr.apartment_code AS apartment_code,
+        ROW_NUMBER() OVER (
+            PARTITION BY fr.channel_number
+            ORDER BY fr.is_cancelled ASC, fr.checkin_date DESC
+        ) AS rn
+    FROM `{project}.marts.fct_reservations` fr
+    WHERE fr.channel_number IN (SELECT conf_code FROM targets)
+      AND fr.apartment_code IS NOT NULL
+)
+SELECT conf_code, apartment_code
+FROM ranked
+WHERE rn = 1
+""".format(project=_PROJECT)
+
+
+def resolve_apartments_by_channel(
+    conf_codes: Iterable[str],
+    full_to_comptable: Dict[str, str],
+) -> Dict[str, str]:
+    """
+    Résout code de confirmation OTA -> code_comptable via Mews (fallback libellé).
+
+    Utilisé quand le libellé de l'annonce OTA (ref_appart) est absent du mapping
+    — typiquement après un renommage d'annonce côté OTA. Le code de confirmation
+    est stable et unique, et Mews connaît déjà l'appartement de la résa.
+
+    Args:
+        conf_codes:        codes de confirmation à résoudre (reference_number).
+        full_to_comptable: {apartment_code_complet: code_comptable}
+                           (cf. load_apartment_comptable_map).
+
+    Returns:
+        {conf_code: code_comptable} — uniquement les codes résolus ET dont
+        l'apartment_code Mews est présent dans full_to_comptable. Les codes
+        introuvables n'apparaissent pas (le caller retombe sur BLOCKING).
+    """
+    codes = sorted({c for c in conf_codes if c})
+    if not codes:
+        return {}
+
+    client = bigquery.Client(project=_PROJECT)
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ArrayQueryParameter("conf_codes", "STRING", codes)]
+    )
+    rows = client.query(_RESOLVE_APT_QUERY, job_config=job_config).result()
+
+    out: Dict[str, str] = {}
+    for row in rows:
+        comptable = full_to_comptable.get(row["apartment_code"])
+        if comptable:
+            out[row["conf_code"]] = comptable
+
+    logger.info(
+        "Mews apartment resolver: %d/%d conf codes résolus vers un code_comptable",
+        len(out), len(codes),
+    )
+    return out

@@ -184,6 +184,31 @@ class TestBookingEntries:
         assert not anomalies
         assert processed[0].code_comptable == "P08-HOC16-7G"
 
+    def test_mews_fallback_resolves_renamed_listing(self):
+        """Libellé absent du mapping (annonce renommée) → résolu via Mews sur
+        le code de confirmation, aucune anomalie bloquante."""
+        r = make_reservation(ref_appart="Libellé Renommé Inconnu", reference_number="HM8QYX9WZN")
+        _, processed, anomalies = generate_entries(
+            [r], PROC_DATE, MAPPING, mews_fallback={"HM8QYX9WZN": "MER21-0G"}, **BOOKING_KWARGS)
+        assert not [a for a in anomalies if a.severity == "BLOCKING"]
+        assert processed[0].code_comptable == "MER21-0G"
+
+    def test_mews_fallback_ignored_when_label_present(self):
+        """Le libellé reste primaire : un fallback Mews divergent n'écrase jamais
+        une résolution par le mapping (zéro régression sur le happy path)."""
+        r = make_reservation(ref_appart="3015679", reference_number="HMX")
+        _, processed, _ = generate_entries(
+            [r], PROC_DATE, MAPPING, mews_fallback={"HMX": "WRONG-CODE"}, **BOOKING_KWARGS)
+        assert processed[0].code_comptable == "MER21-0G"
+
+    def test_mews_fallback_absent_still_blocks(self):
+        """Ni mapping ni fallback → BLOCKING inchangé (comportement historique)."""
+        r = make_reservation(ref_appart="UNKNOWN", reference_number="HMNOPE")
+        _, processed, anomalies = generate_entries(
+            [r], PROC_DATE, MAPPING, mews_fallback={}, **BOOKING_KWARGS)
+        assert processed == []
+        assert any(a.type == "MAPPING_NOT_FOUND" and a.severity == "BLOCKING" for a in anomalies)
+
     def test_ref_piece_filled_from_bill_lookup(self):
         bill_lookup = {"5493245107": ("bill-uuid-1", "FAC-2025-042")}
         entries, _, _ = generate_entries(

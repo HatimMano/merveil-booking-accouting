@@ -22,18 +22,24 @@ import logging
 import os
 import time
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from accounting.entries import generate_entries
 from bigquery.journal import PHASE_INTENT, PHASE_POSTED, read_journal, run_mode, write_phase
 from bigquery.postings import build_synthetic_results, write_postings
+from config.mapping_loader import _normalize_key, load_apartment_comptable_map
 from drive.client import DriveClient
-from lookups.mews import lookup_bills
+from lookups.mews import lookup_bills, resolve_apartments_by_channel
 from pennylane.client import PennyLaneClient
 from sources.base import Source
 from validators.anomalies import Anomaly, Severity, check_balance, validate_reservation_amounts
 
 logger = logging.getLogger(__name__)
+
+# Pivot apartment_code Mews (complet) → code_comptable, pour le fallback Mews
+# quand un libellé d'annonce OTA est absent du mapping (annonce renommée).
+_APARTMENT_CODE_MAP_PATH = Path(__file__).parent / "config" / "mapping" / "Mapping_appart_code.csv"
 
 
 def run_pipeline(
@@ -75,6 +81,26 @@ def run_pipeline(
         logger.warning("Bill lookup failed (non-fatal): %s", exc)
         bill_lookup = {}
 
+    # ── Step 2.5: fallback Mews pour les libellés absents du mapping ────────
+    # Annonce OTA renommée → ref_appart introuvable au mapping. On résout via
+    # le code de confirmation (stable) → Mews → apartment_code → code_comptable.
+    # Non-fatal : en cas d'échec, on retombe sur le BLOCKING habituel.
+    mews_fallback: dict[str, str] = {}
+    try:
+        unresolved = [
+            r.reference_number
+            for b in src_result.batches for r in b.reservations
+            if src_result.mapping.get(r.ref_appart) is None
+            and src_result.mapping.get(_normalize_key(r.ref_appart)) is None
+            and r.reference_number
+        ]
+        if unresolved:
+            full_to_comptable = load_apartment_comptable_map(_APARTMENT_CODE_MAP_PATH)
+            mews_fallback = resolve_apartments_by_channel(unresolved, full_to_comptable)
+    except Exception as exc:
+        logger.warning("Mews apartment fallback failed (non-fatal): %s", exc)
+        mews_fallback = {}
+
     # ── Step 3: génération des écritures par batch ─────────────────────────
     per_batch_entries = []
     all_processed = []
@@ -84,6 +110,7 @@ def run_pipeline(
             processing_date,
             src_result.mapping,
             bill_lookup=bill_lookup,
+            mews_fallback=mews_fallback,
             **source.entries_kwargs,
         )
         anomalies.extend(entry_anomalies)
