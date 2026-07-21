@@ -77,17 +77,20 @@ booking-accounting/
 | `accounting/entries.py` | `generate_entries()` — builds PennyLane accounting lines from reservations |
 | `pennylane/client.py` | `PennyLaneClient` — posts batches to PennyLane API, returns `ledger_entry_line_id` per line |
 | `bigquery/postings.py` | `write_postings()` — append-only trace de chaque ligne postée vers `pennylane.raw_postings` (chantier 1 rapprochement) |
-| `lookups/mews.py` | `lookup_bills()` — query BQ batch : `(ota_ref, gross)` → (bill_id, bill_number) avec matching par proximité de montant (chantier 2 rapprochement) |
+| `lookups/mews.py` | `lookup_bills()` — query BQ batch : `(ota_ref, gross)` → (bill_id, bill_number) matching par proximité (chantier 2). `resolve_apartments_by_channel()` — code de confirmation → apartment_code Mews → code_comptable (fallback libellé, cf. ci-dessous) |
 | `drive/client.py` | `DriveClient` — downloads xlsx, creates folders, moves files, creates Sheets |
 | `config/settings.py` | Account codes, journal IDs, thresholds |
-| `config/mapping_loader.py` | `load_mapping()` (Booking), `load_airbnb_mapping()` (Airbnb) |
+| `config/mapping_loader.py` | `load_mapping()` (Booking), `load_airbnb_mapping()` (Airbnb), `load_apartment_comptable_map()` (apartment_code complet → code_comptable, pivot fallback Mews) |
 
 ## Mapping files
 | File | Format | Key |
 |---|---|---|
 | `config/mapping/CodeAppart_Compta.csv` | semicolons, skip first 5 rows | Booking numeric ID → accounting code |
 | `config/mapping/AirbnbLogement_Compta.csv` | comma-separated | Airbnb listing name → accounting code |
-| `config/mapping/Mapping_appart_code.csv` | master file (semicolons) | col 2 = CodeComptable, col 7 = Airbnb listing name |
+| `config/mapping/Mapping_appart_code.csv` | master file (semicolons) | col 0 = code appart complet, col 2 = CodeComptable, col 1 = Airbnb listing name |
+
+### Fallback Mews (résolution appart, 2026-07-19)
+Le mapping appart repose sur le **libellé** de l'annonce OTA (`Logement`), mutable → renommage = résa BLOCKING (récurrent). Le fichier de versement ne porte aucun code appart stable, seulement le **code de confirmation** (par résa). Fix : quand le libellé échoue (exact + normalisé), `orchestrator.py` Step 2.5 résout via le code de confirmation → `fct_reservations.channel_number` → apartment_code → code_comptable (`Mapping_appart_code.csv`). **Libellé reste primaire** (0 régression) ; le fallback ne touche que les résas déjà vouées au BLOCKING → auto-heal des renommages. Non-fatal (retombe sur BLOCKING si Mews ne résout pas). Désambiguïsation collisions (changement d'appart) = non-annulée + CI récent. Pas 100 % stable (90,9 % couverture, 3 collisions/12 mois) → jamais en primaire. Cf. ADR `decisions.md` 2026-07-19.
 
 ## Input format — Booking (Excel)
 Flat weekly Excel export from Booking.com extranet. One row per reservation.
