@@ -20,7 +20,7 @@ AIRBNB_ACCOUNT_SUPPLIER = "604600"     # Direct charge — Airbnb issues 1 invoi
 AIRBNB_ACCOUNT_BANK = "51105000"       # Same bank account
 
 # Airbnb Excel row types to include in accounting entries
-AIRBNB_RESERVATION_TYPES = {"Réservation", "Régularisation de la résolution", "Hors réservation", "Frais d'annulation", "Remboursement des frais d'annulation"}
+AIRBNB_RESERVATION_TYPES = {"Réservation", "Régularisation", "Régularisation de la résolution", "Hors réservation", "Frais d'annulation", "Remboursement des frais d'annulation"}
 
 # Account for Airbnb cancellation fees charged to the host (reclassement automatique)
 AIRBNB_ACCOUNT_CANCELLATION_FEE = "604610"
