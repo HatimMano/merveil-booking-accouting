@@ -49,7 +49,7 @@ booking-accounting/
 │   ├── base.py            # Source (ABC) + SourceFetchResult (dataclass)
 │   ├── booking.py         # BookingDriveSource ← Flux 1 Booking (Drive xlsx)
 │   ├── airbnb.py          # AirbnbDriveSource  ← Flux 1 Airbnb (Drive xlsx)
-│   ├── mews_bills.py      # 🚧 V1 — MewsBillsSource (BQ int_compta__bills_net → 706 + 411 DEBIT)
+│   ├── mews_bills.py      # ❌ ABANDONNÉ 2026-07-26 — les ventes Mews sont déversées par l'intégration NATIVE Mews→Pennylane à J+3 (confirmé journal réception Philippe 22/07, cf. ADR). Philippe garde les ventes natives, écrase les encaissements natifs (remplacés par flux 1+2)
 │   └── mews_payments.py   # ✅ Flux 2 — MewsPaymentsSource (BQ stg_mews_exports__* → 511035 + 401MEWS + 411<canal>) — bq_only en cours
 └── (autres modules réutilisés par tous : accounting, pennylane, bigquery, drive, lookups, validators)
 ```
