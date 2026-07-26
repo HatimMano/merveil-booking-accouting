@@ -91,6 +91,46 @@ def read_journal(
     return state
 
 
+def read_journal_by_keys(
+    *, ota: str, mode: str, batch_keys: list,
+    client: Optional[bigquery.Client] = None,
+) -> Dict[str, str]:
+    """Return {batch_key: 'posted' | 'intent'} pour cet OTA + mode, toutes
+    sources confondues — pour les sources BQ à fenêtre glissante (Mews
+    Payments) où `source_file`/`file_hash` changent à chaque run alors que le
+    batch (un versement, immuable) a déjà été posté sous une fenêtre
+    précédente. Un payout_id posté une fois est posté pour toujours.
+
+    ⚠ Conséquence : une re-livraison du même payout avec des montants
+    CORRIGÉS ne serait pas re-postée (la réco 9.7 la détecterait).
+    """
+    client = client or bigquery.Client(project=_PROJECT)
+    keys = [str(k) for k in batch_keys]
+    if not keys:
+        return {}
+    query = f"""
+        SELECT batch_key, LOGICAL_OR(phase = 'posted') AS has_posted
+        FROM `{_TABLE}`
+        WHERE ota = @ota
+          AND mode = @mode
+          AND batch_key IN UNNEST(@batch_keys)
+        GROUP BY batch_key
+    """
+    job_config = bigquery.QueryJobConfig(query_parameters=[
+        bigquery.ScalarQueryParameter("ota", "STRING", ota),
+        bigquery.ScalarQueryParameter("mode", "STRING", mode),
+        bigquery.ArrayQueryParameter("batch_keys", "STRING", keys),
+    ])
+    rows = list(client.query(query, job_config=job_config).result())
+    state = {r.batch_key: (PHASE_POSTED if r.has_posted else PHASE_INTENT) for r in rows}
+    if state:
+        logger.info(
+            "Journal (scope batch_key): %d batch(es) déjà tracé(s) pour %s (mode=%s) : %s",
+            len(state), ota, mode, state,
+        )
+    return state
+
+
 def write_phase(
     *, ota: str, source_file: str, file_hash: str, batch_key: str,
     batch_index: int, phase: str, mode: str, run_id: str,

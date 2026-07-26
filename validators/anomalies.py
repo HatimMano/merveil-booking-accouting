@@ -112,7 +112,7 @@ def check_duplicate_reservations(reservations: list) -> List[Anomaly]:
 # Passe 2 — per-reservation checks (run after mapping + entry generation)
 # ---------------------------------------------------------------------------
 
-def validate_reservation_amounts(reservation) -> List[Anomaly]:
+def validate_reservation_amounts(reservation, commission_bounds=None) -> List[Anomaly]:
     """
     Validate the financial amounts of a single reservation.
 
@@ -122,12 +122,18 @@ def validate_reservation_amounts(reservation) -> List[Anomaly]:
 
     Args:
         reservation: A Reservation object (code_comptable already set).
+        commission_bounds: (low, high) override des bornes de taux commission —
+            les frais Adyen (~0.3-4 %) n'ont rien à voir avec une commission
+            OTA (10-20 %). None = bornes globales Booking/Airbnb.
 
     Returns:
         List of anomalies for this reservation (may be empty).
     """
     anomalies: List[Anomaly] = []
     r = reservation
+    low_threshold, high_threshold = commission_bounds or (
+        COMMISSION_LOW_THRESHOLD, COMMISSION_HIGH_THRESHOLD,
+    )
 
     # Check: city_tax est stockée NÉGATIVE par convention (Booking) ou nulle
     # (Airbnb). Une valeur positive inverserait silencieusement le calcul
@@ -180,13 +186,13 @@ def validate_reservation_amounts(reservation) -> List[Anomaly]:
     if r.amount > Decimal("0") and r.commission != Decimal("0"):
         commission_rate = abs(r.commission) / r.amount
 
-        if commission_rate > COMMISSION_HIGH_THRESHOLD:
+        if commission_rate > high_threshold:
             anomalies.append(Anomaly(
                 type=AnomalyType.COMMISSION_RATE_HIGH,
                 severity=Severity.WARNING,
                 message=(
                     f"Commission rate {commission_rate:.1%} exceeds the "
-                    f"{COMMISSION_HIGH_THRESHOLD:.0%} threshold "
+                    f"{high_threshold:.0%} threshold "
                     f"for reservation {r.reference_number}"
                 ),
                 source_file=r.source_file,
@@ -197,13 +203,13 @@ def validate_reservation_amounts(reservation) -> List[Anomaly]:
                     "commission": str(r.commission),
                 },
             ))
-        elif commission_rate < COMMISSION_LOW_THRESHOLD:
+        elif commission_rate < low_threshold:
             anomalies.append(Anomaly(
                 type=AnomalyType.COMMISSION_RATE_LOW,
                 severity=Severity.WARNING,
                 message=(
                     f"Commission rate {commission_rate:.1%} is below the "
-                    f"{COMMISSION_LOW_THRESHOLD:.0%} threshold "
+                    f"{low_threshold:.0%} threshold "
                     f"for reservation {r.reference_number}"
                 ),
                 source_file=r.source_file,

@@ -11,5 +11,9 @@ sans toucher au reste du code.
 from .base import Source, SourceFetchResult
 from .booking import BookingDriveSource
 from .airbnb import AirbnbDriveSource
+from .mews_payments import MewsPaymentsSource
 
-__all__ = ["Source", "SourceFetchResult", "BookingDriveSource", "AirbnbDriveSource"]
+__all__ = [
+    "Source", "SourceFetchResult",
+    "BookingDriveSource", "AirbnbDriveSource", "MewsPaymentsSource",
+]

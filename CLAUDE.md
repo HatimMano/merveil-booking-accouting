@@ -17,7 +17,7 @@ Triggered via HTTP POST by Cloud Scheduler (or manually).
 ```json
 {
   "folder_id": "1abc...xyz",
-  "ota": "booking",          // "booking" or "airbnb"
+  "ota": "booking",          // "booking", "airbnb" ou "mews-payments" (source BQ, folder_id ignoré)
   "date": "2026-03-27",      // or "AUTO" for today (Paris timezone)
   "dry_run": true,           // optional — validate, no PennyLane post, no BQ write, no archiving
   "test": true,              // optional — post with [TEST] prefix
@@ -50,7 +50,7 @@ booking-accounting/
 │   ├── booking.py         # BookingDriveSource ← Flux 1 Booking (Drive xlsx)
 │   ├── airbnb.py          # AirbnbDriveSource  ← Flux 1 Airbnb (Drive xlsx)
 │   ├── mews_bills.py      # 🚧 V1 — MewsBillsSource (BQ int_compta__bills_net → 706 + 411 DEBIT)
-│   └── mews_payments.py   # 🚧 V2 — MewsPaymentsSource (BQ raw_payments + Stripe → 511035 + 411 CREDIT)
+│   └── mews_payments.py   # ✅ Flux 2 — MewsPaymentsSource (BQ stg_mews_exports__* → 511035 + 401MEWS + 411<canal>) — bq_only en cours
 └── (autres modules réutilisés par tous : accounting, pennylane, bigquery, drive, lookups, validators)
 ```
 
@@ -207,6 +207,22 @@ Le blocage historique du flux 2 (« pas d'endpoint Mews pour les commissions/ver
 - **Conséquence pour ce repo** : la future `MewsPaymentsSource` lira ces vues BQ (plus « bloqué côté commissions », plus de taux figés) → écritures par versement : DEBIT 511035 (net), DEBIT commissions Mews Payments (réelles), CREDIT 411<canal> par résa (gross). Pattern : `bq_only=true` en parallèle de la saisie comptable → revue Philippe → live. Remplace les 2-3h/5j de saisie manuelle du « Bilan Mews Payments ».
 - **Prérequis avant de coder** : quelques jours/semaines d'accumulation + `dash_finance_payouts` (réco versements ↔ paiements ↔ relevé BNP) pour valider les chiffres.
 - ⚠ Si une livraison webhook rate, Mews ne retente pas (trou 24h silencieux) → alerte de continuité à câbler.
+
+### ✅ `MewsPaymentsSource` codée + validée en dry-run (2026-07-26)
+
+`sources/mews_payments.py` — source BQ (pas de Drive), `POST /process {"ota": "mews-payments"}`. Réponses Philippe 22/07 intégrées : journal **MEWS** existant (`3605247`), frais Adyen → **401MEWS** (lettrés contre la facture mensuelle Mews). 1 batch = 1 versement, écriture **datée du payout** (`MewsPayoutBatch.entry_date`, lu par l'orchestrator) :
+```
+DEBIT  511035     = net versé          DEBIT 401MEWS = Σ frais Adyen (signés)
+CREDIT 411<canal> = gross par paiement (411WEBSITE/EXPEDIA/VRBO/MARRIOTT/PLUM/HOPPER/HOMETOGO — ids relevés dans raw_ledger_lines)
+```
+- **Résolution canal** (4 niveaux) : résa → bill (si 1 canal distinct) → compte Customer = 411WEBSITE (pratique Philippe) → 411DIVERS. Chaque fallback = WARNING (`CANAL_UNRESOLVED`). Booking/Airbnb en paiement carte = `UNEXPECTED_CHANNEL` (doublon potentiel avec flux 1).
+- **Idempotence** : `journal_scope = 'batch_key'` (`read_journal_by_keys` dans `bigquery/journal.py`) — un payout_id posté une fois est posté pour toujours, quelle que soit la fenêtre de fetch (overlap 7j, `MEWS_PAYMENTS_OVERLAP_DAYS`).
+- ⚠ **Périmètre = `DATE(created_at)` du payout, PAS `delivered_at`** : la livraison webhook du 16/07 était un dump historique one-shot (365 payouts Stripe depuis 2025-01, déjà comptabilisés manuellement). Filtrer sur delivered_at les ré-embarquerait tous.
+- **Convention export validée** : `net = gross + commission`, commission **SIGNÉE** (négative = frais prélevés ; positive = frais restitués sur refunds/chargebacks — 17 cas depuis juin). `entries.py` gère déjà (Σ signée, bascule D/C). Types ère Adyen : Charge / Refund / Chargeback (chemin nominal, DEBIT 411). Types ère Stripe uniquement : `Commission adjustment` + `Platform fee` (**gross NULL**) → filet de sécurité : routés 401MEWS via la branche commission adjustment + WARNING `FEE_TRANSACTION`.
+- **Garde-fous BLOCKING** : `EXPORT_STALE` (dernier export > 72h — Mews ne retente pas un POST raté) + `PAYOUT_UNBALANCED` (net payout ≠ Σ transactions). Bornes commission par source : `commission_rate_bounds = (0, 6%)` (vs 10-20% OTA).
+- **Dry-run validé 2026-07-26** (local, 0 POST) : 8 payouts Adyen 16-24/07, 101 tx, 117 lignes, **8/8 équilibrés au centime**, 0 bloquant, 16 warnings légitimes (8 CANAL_UNRESOLVED dont Jason Paez 5 984 € + chargeback Oliver Bryan −808,80 € ; 8 FX multi-devises — convention markup à figer avec Philippe). `ref_piece` (bill Mews pré-résolu par la source, fallback du lookup heuristique) rempli ~35% — structurel, bills pas encore clos au payout.
+- **Tests** : `tests/test_mews_payments.py` (9 tests synthétiques, invariant D=C). Suite complète 74/74.
+- **Reste** : commit + deploy → runs `bq_only=true` quotidiens (~2 sem, comparaison saisies Philippe) → revue → live + scheduler `mews-payments-daily` (7h Paris, créé en pause d'abord). Convention FX à figer pendant la revue.
 
 ## Known issues / notes
 - SA must have **Organizer** role on the Shared Drive to move files uploaded by others

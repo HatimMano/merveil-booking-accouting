@@ -26,7 +26,9 @@ from pathlib import Path
 from typing import Any
 
 from accounting.entries import generate_entries
-from bigquery.journal import PHASE_INTENT, PHASE_POSTED, read_journal, run_mode, write_phase
+from bigquery.journal import (
+    PHASE_INTENT, PHASE_POSTED, read_journal, read_journal_by_keys, run_mode, write_phase,
+)
 from bigquery.postings import build_synthetic_results, write_postings
 from config.mapping_loader import _normalize_key, load_apartment_comptable_map
 from drive.client import DriveClient
@@ -105,9 +107,11 @@ def run_pipeline(
     per_batch_entries = []
     all_processed = []
     for batch in src_result.batches:
+        # Une source peut dater ses écritures par batch (ex: Mews Payments =
+        # date du versement) au lieu de la date de run.
         batch_entries, batch_processed, entry_anomalies = generate_entries(
             batch.reservations,
-            processing_date,
+            getattr(batch, "entry_date", None) or processing_date,
             src_result.mapping,
             bill_lookup=bill_lookup,
             mews_fallback=mews_fallback,
@@ -118,8 +122,9 @@ def run_pipeline(
         all_processed.extend(batch_processed)
 
     # ── Step 4: validation montants par réservation ────────────────────────
+    commission_bounds = getattr(source, "commission_rate_bounds", None)
     for r in all_processed:
-        anomalies.extend(validate_reservation_amounts(r))
+        anomalies.extend(validate_reservation_amounts(r, commission_bounds=commission_bounds))
 
     # ── Step 5: balance check global ───────────────────────────────────────
     balance_ok, anomalies = _check_global_balance(all_processed, anomalies)
@@ -179,6 +184,14 @@ def run_pipeline(
     if force:
         logger.warning("force=True — journal ignoré en lecture : TOUS les batches seront (re)postés.")
         journal_state: dict[str, str] = {}
+    elif getattr(source, "journal_scope", "file") == "batch_key":
+        # Source BQ à fenêtre glissante : source_file/file_hash changent à chaque
+        # run — le skip se fait sur la clé métier seule (payout immuable).
+        journal_state = read_journal_by_keys(
+            ota=source.name,
+            mode=mode,
+            batch_keys=batch_keys,
+        )
     else:
         journal_state = read_journal(
             ota=source.name,

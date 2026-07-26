@@ -50,4 +50,17 @@ class Reservation:
 
     # --- Set after mapping lookup ---
     code_comptable: Optional[str] = None
-    """Accounting code resolved from the mapping file, e.g. 'MER21-0G'."""
+    """Accounting code resolved from the mapping file, e.g. 'MER21-0G'.
+    Peut être pré-résolu par la source (BQ) — dans ce cas le mapping est bypassé."""
+
+    # --- Overrides par ligne (sources BQ multi-canal, ex: Mews Payments) ---
+    account_client: Optional[str] = None
+    """Compte client 411 spécifique à cette ligne (ex '411EXPEDIA'). None = compte du batch."""
+
+    canal: Optional[str] = None
+    """Libellé canal pour cette ligne (ex 'EXPEDIA'). None = ota_label du batch."""
+
+    bill_id_mews: Optional[str] = None
+    bill_number: Optional[str] = None
+    """Bill Mews pré-résolu par la source (jointure exacte) — fallback quand
+    le lookup heuristique de l'orchestrator ne connaît pas la référence."""

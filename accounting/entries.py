@@ -124,7 +124,8 @@ def generate_entries(
     # --- Step 1: resolve mapping for every reservation ---
     mews_fallback = mews_fallback or {}
     for r in reservations:
-        code_comptable = mapping.get(r.ref_appart) or mapping.get(_normalize_key(r.ref_appart))
+        # Une source BQ peut pré-résoudre le code (elle connaît déjà l'appart Mews).
+        code_comptable = r.code_comptable or mapping.get(r.ref_appart) or mapping.get(_normalize_key(r.ref_appart))
 
         # Fallback Mews : le libellé de l'annonce est absent du mapping (annonce
         # OTA renommée). On résout via le code de confirmation, stable et connu
@@ -243,7 +244,10 @@ def generate_entries(
             and r.reservation_status == "Commission adjustment"
         )
 
-        bill_id_mews, bill_number = (bill_lookup or {}).get(r.reference_number, (None, None))
+        bill_id_mews, bill_number = (bill_lookup or {}).get(
+            r.reference_number, (r.bill_id_mews, r.bill_number)
+        )
+        line_ota_label = r.canal or ota_label
 
         if is_cancellation_fee:
             # Route directly to 604610 — no intermediate 411AIRBNB step.
@@ -289,8 +293,8 @@ def generate_entries(
                 journal=journal_code,
                 date=processing_date,
                 ref_piece=bill_number or "",
-                account=account_client,
-                label=f"{r.code_comptable}- {ota_label} - {r.guest_name} - CO :{checkout_label}",
+                account=r.account_client or account_client,
+                label=f"{r.code_comptable}- {line_ota_label} - {r.guest_name} - CO :{checkout_label}",
                 debit=None if gross_excl_city_tax >= 0 else -gross_excl_city_tax,
                 credit=gross_excl_city_tax if gross_excl_city_tax >= 0 else None,
                 ota_reservation_ref=r.reference_number,

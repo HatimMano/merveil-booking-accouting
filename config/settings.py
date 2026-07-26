@@ -25,6 +25,36 @@ AIRBNB_RESERVATION_TYPES = {"Réservation", "Régularisation", "Régularisation 
 # Account for Airbnb cancellation fees charged to the host (reclassement automatique)
 AIRBNB_ACCOUNT_CANCELLATION_FEE = "604610"
 
+# === Mews Payments (flux 2 — encaissements carte Adyen via exports webhook) ===
+
+MEWS_PAYMENTS_JOURNAL_CODE = "MEWS"       # journal MEWS existant (réponse Philippe 2026-07-22)
+MEWS_PAYMENTS_ACCOUNT_BANK = "511035"     # compte miroir Mews Payments
+MEWS_PAYMENTS_ACCOUNT_SUPPLIER = "401MEWS"  # frais Adyen — lettrés contre la facture mensuelle Mews
+MEWS_PAYMENTS_ACCOUNT_FALLBACK = "411DIVERS"
+
+# ota_source (fct_reservations) → (compte 411, libellé court pour les labels).
+# Booking/Airbnb : un paiement carte sur ces canaux est légitime (VCC/lien de
+# paiement) mais rare — crédité sur leur 411 avec anomalie UNEXPECTED_CHANNEL.
+MEWS_PAYMENTS_CHANNEL_ACCOUNTS = {
+    "Site direct": ("411WEBSITE", "DIRECT"),
+    "Expedia":     ("411EXPEDIA", "EXPEDIA"),
+    "HomeAway":    ("411VRBO", "VRBO"),
+    "Vrbo":        ("411VRBO", "VRBO"),
+    "Marriott":    ("411MARRIOTT", "MARRIOTT"),
+    "Plum Guide":  ("411PLUM", "PLUM"),
+    "Hopper":      ("411HOPPER", "HOPPER"),
+    "HomeToGo":    ("411HOMETOGO", "HOMETOGO"),
+    "Booking.com": ("411BOOKING", "BOOKING"),
+    "Airbnb":      ("411AIRBNB", "AIRBNB"),
+}
+
+# Fenêtre de fetch (delivered_at) — le journal (scope batch_key) rend le run idempotent
+MEWS_PAYMENTS_OVERLAP_DAYS = 7
+
+# Garde-fou continuité exports : Mews ne retente pas un POST webhook raté.
+# 72h couvre le trou week-end (payouts jours ouvrés uniquement).
+MEWS_PAYMENTS_EXPORT_MAX_AGE_HOURS = 72
+
 # === Validation thresholds ===
 
 # Maximum allowed difference for the global balance check
@@ -68,6 +98,7 @@ PENNYLANE_DATE_FORMAT = "%d/%m/%Y"
 PENNYLANE_JOURNAL_IDS = {
     "BOOK": 3621237,
     "AIRB": 3621262,
+    "MEWS": 3605247,  # journal MEWS existant (jambe paiement Philippe + ventes intégration native)
 }
 
 PENNYLANE_ACCOUNT_IDS = {
@@ -81,4 +112,15 @@ PENNYLANE_ACCOUNT_IDS = {
     # Banque — compte différent selon OTA (même code interne "51105000")
     "51105000_BOOK":    671113821,  # → 51105  BOOKING
     "51105000_AIRB":    671113820,  # → 51104  AIR BNB
+    # Mews Payments (flux 2) — ids relevés dans pennylane.raw_ledger_lines 2026-07-25
+    "511035":           849542449,  # Mews Payments (miroir Adyen)
+    "401MEWS":          760050052,  # Frais Adyen / facture mensuelle Mews
+    "411WEBSITE":       760098760,
+    "411EXPEDIA":       1302850080,
+    "411VRBO":          760098759,
+    "411MARRIOTT":      760227026,
+    "411PLUM":          760098967,
+    "411HOPPER":        1299758488,
+    "411HOMETOGO":      2246708700,
+    "411DIVERS":        760049834,
 }

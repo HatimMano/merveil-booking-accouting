@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config.settings import DRIVE_FOLDER_BOOKING, DRIVE_FOLDER_AIRBNB
 from drive.client import DriveClient
 from orchestrator import run_pipeline
-from sources import AirbnbDriveSource, BookingDriveSource
+from sources import AirbnbDriveSource, BookingDriveSource, MewsPaymentsSource
 
 logging.basicConfig(
     level=logging.INFO,
@@ -61,11 +61,14 @@ _AIRBNB_MAPPING_PATH  = Path(__file__).parent / "config" / "mapping" / "AirbnbLo
 _SOURCE_FACTORIES = {
     "booking": lambda drive, folder_id, tmp: BookingDriveSource(drive, folder_id, _BOOKING_MAPPING_PATH, tmp),
     "airbnb":  lambda drive, folder_id, tmp: AirbnbDriveSource(drive, folder_id, _AIRBNB_MAPPING_PATH, tmp),
+    # Source BQ (flux 2) — pas de Drive : folder_id/tmp ignorés
+    "mews-payments": lambda drive, folder_id, tmp: MewsPaymentsSource(),
 }
 
 _DEFAULT_FOLDERS = {
     "booking": DRIVE_FOLDER_BOOKING,
     "airbnb":  DRIVE_FOLDER_AIRBNB,
+    "mews-payments": "",
 }
 
 
