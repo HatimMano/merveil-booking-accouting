@@ -169,6 +169,7 @@ Jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
 | `ledger-full-pull-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `ledger-full-pull` (grand livre COMPLET tous comptes, daily incr. overlap 45j → `pennylane.raw_ledger_lines`) — cf. Lot A ci-dessous |
 | `invoices-full-pull-daily` | Tous les jours à 6h15 Paris ✅ | Cloud Run **Job** `invoices-full-pull` (factures clients + fournisseurs, daily incr. overlap 90j → `pennylane.raw_{customer,supplier}_invoices`) — cf. Lot B ci-dessous |
 | `bank-accounts-pull-daily` | Tous les jours à 6h30 Paris ✅ | Cloud Run **Job** `bank-accounts-pull` (soldes bancaires réels, snapshot append-only → `pennylane.raw_bank_accounts`) — cf. Trésorerie ci-dessous |
+| `mews-payments-daily` | Tous les jours à 7h Paris ✅ | Cloud Run service `booking-pipeline` /process — **flux 2, mode `bq_only=true`** (phase validation : trace BQ seule, ZÉRO POST Pennylane). Au GO Philippe : retirer `bq_only` du body |
 
 Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt).
 
@@ -222,7 +223,8 @@ CREDIT 411<canal> = gross par paiement (411WEBSITE/EXPEDIA/VRBO/MARRIOTT/PLUM/HO
 - **Garde-fous BLOCKING** : `EXPORT_STALE` (dernier export > 72h — Mews ne retente pas un POST raté) + `PAYOUT_UNBALANCED` (net payout ≠ Σ transactions). Bornes commission par source : `commission_rate_bounds = (0, 6%)` (vs 10-20% OTA).
 - **Dry-run validé 2026-07-26** (local, 0 POST) : 8 payouts Adyen 16-24/07, 101 tx, 117 lignes, **8/8 équilibrés au centime**, 0 bloquant, 16 warnings légitimes (8 CANAL_UNRESOLVED dont Jason Paez 5 984 € + chargeback Oliver Bryan −808,80 € ; 8 FX multi-devises — convention markup à figer avec Philippe). `ref_piece` (bill Mews pré-résolu par la source, fallback du lookup heuristique) rempli ~35% — structurel, bills pas encore clos au payout.
 - **Tests** : `tests/test_mews_payments.py` (9 tests synthétiques, invariant D=C). Suite complète 74/74.
-- **Reste** : commit + deploy → runs `bq_only=true` quotidiens (~2 sem, comparaison saisies Philippe) → revue → live + scheduler `mews-payments-daily` (7h Paris, créé en pause d'abord). Convention FX à figer pendant la revue.
+- **Déployé 2026-07-26** (rev `00078-9kr`, commit `9a7a044`) : 1er run `bq_only` prod OK (78 paiements, 90 lignes BQ, 0 Pennylane) + scheduler `mews-payments-daily` 7h Paris **en mode bq_only** (accumulation ~2 sem). IAM : `booking-pipeline-sa` a reçu READER sur `mews_exports_raw` + `marts` (dataset ACL — `bq add-iam-policy-binding` nécessite un allowlisting, passer par `access_entries`).
+- **Reste** : comparaison saisies Philippe au centime (requête sur `pennylane.raw_postings WHERE ota='mews-payments' AND bq_only`) → figer convention FX → GO → retirer `bq_only` du body scheduler → il arrête sa saisie.
 
 ## Known issues / notes
 - SA must have **Organizer** role on the Shared Drive to move files uploaded by others
