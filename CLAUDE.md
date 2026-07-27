@@ -171,7 +171,9 @@ Jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
 | `bank-accounts-pull-daily` | Tous les jours à 6h30 Paris ✅ | Cloud Run **Job** `bank-accounts-pull` (soldes bancaires réels, snapshot append-only → `pennylane.raw_bank_accounts`) — cf. Trésorerie ci-dessous |
 | `mews-payments-daily` | Tous les jours à 7h Paris ✅ | Cloud Run service `booking-pipeline` /process — **flux 2, mode `bq_only=true`** (phase validation : trace BQ seule, ZÉRO POST Pennylane). Au GO Philippe : retirer `bq_only` du body |
 
-Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt).
+Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11, **réellement appliquée le 2026-07-27**). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt).
+
+⚠ **La pause n'avait jamais été appliquée** (constaté 2026-07-27 : aucun `PauseJob` dans l'audit log, rétention 400 j). Les deux crons tiraient donc à blanc — `run_pipeline` sort en `{"status": "skipped"}` quand le dossier Drive est vide, en HTTP 200, **sans aucun log applicatif** : un run à vide est indistinguable d'un run réussi dans les logs. C'est ce qui a rendu le drift invisible pendant 2 mois. Si tu remets un schedule un jour, logue explicitement le skip.
 
 ### Cloud Run Job `lettering-sim`
 - **Image** : partagée avec service `booking-pipeline` (entrypoint override `python -m pennylane.lettering_sim 60`)
