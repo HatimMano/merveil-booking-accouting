@@ -209,7 +209,7 @@ Le blocage historique du flux 2 (« pas d'endpoint Mews pour les commissions/ver
 - **Jointures validées au centime** : `transaction_id` = `stg_mews__payments.identifier` (→ payment_id, bill_id, reservation_id, canal) ; sum(transactions) = payout net ET commission ; refunds inclus (négatifs, commission 0).
 - **Conséquence pour ce repo** : la future `MewsPaymentsSource` lira ces vues BQ (plus « bloqué côté commissions », plus de taux figés) → écritures par versement : DEBIT 511035 (net), DEBIT commissions Mews Payments (réelles), CREDIT 411<canal> par résa (gross). Pattern : `bq_only=true` en parallèle de la saisie comptable → revue Philippe → live. Remplace les 2-3h/5j de saisie manuelle du « Bilan Mews Payments ».
 - **Prérequis avant de coder** : quelques jours/semaines d'accumulation + `dash_finance_payouts` (réco versements ↔ paiements ↔ relevé BNP) pour valider les chiffres.
-- ⚠ Si une livraison webhook rate, Mews ne retente pas (trou 24h silencieux) → alerte de continuité à câbler.
+- ⚠ Si une livraison webhook rate, Mews ne retente pas (trou 24h silencieux) → **alerte de continuité câblée** : dbt `trigger_finance_flow_stale` surveille la livraison (`stg_mews_exports__deliveries`, 30h), le contenu (rapports vides, 120h) ET les payouts non postés (âge du plus vieux payout Adyen sans `posted` dans `posting_journal`, 48h — cf. ADR `decisions.md` 2026-08-01). Le garde-fou `EXPORT_STALE` (BLOCKING à 72h) reste dans la source.
 
 ### ✅ `MewsPaymentsSource` codée + validée en dry-run (2026-07-26)
 
@@ -232,7 +232,7 @@ CREDIT 411<canal> = gross par paiement (411WEBSITE/EXPEDIA/VRBO/MARRIOTT/PLUM/HO
 - SA must have **Organizer** role on the Shared Drive to move files uploaded by others
 - `list_excel_files()` in `drive/client.py` also returns Google Sheets natively converted → filter by extension handled at download time
 - `gcloud run services update-traffic` does NOT deploy a new image — always use `update --image`
-- Le mapping `CodeAppart_Compta.csv` doit être mis à jour et redéployé si un nouvel appartement Booking apparaît (`MAPPING_NOT_FOUND` = anomalie bloquante)
+- Le mapping `CodeAppart_Compta.csv` doit être mis à jour et redéployé si un nouvel appartement Booking apparaît (`MAPPING_NOT_FOUND` = anomalie bloquante). Idem `Mapping_appart_code.csv` pour le **flux 2** (mews-payments) : c'est le seul fichier qu'il lit, et une entrée manquante bloque TOUT le run (incident KLE40 du 29-31/07, cf. changelog 2026-08-01). ⚠ Les 3 CSV de mapping recopient à la main un code dérivable du code Mews (`strip(^[NP]\d+-)`, 132/133 conformes, seule exception SEB23-3FG) → dérive silencieuse entre fichiers + typos indétectables. Backlog : dériver + CSV réduit aux exceptions.
 
 ## ⭐ Journal write-ahead — `pennylane.posting_journal` (idempotence rejeu, 2026-07-02)
 
@@ -389,6 +389,13 @@ Frère de `ledger_full` (Lot A) mais sur les **factures** : endpoints Pennylane 
 ---
 
 ## Changelog
+
+### 2026-08-01 — Incident mapping KLE40 : flux 2 bloqué 3 jours + 15 écritures Airbnb mal libellées
+- **Cause** : typo `KLE40-2D` (au lieu de `2F`) introduite fin avril 2026 dans les 3 CSV de mapping — le code n'existe dans aucune source amont (Mews, natif Mews→Pennylane, factures fournisseurs et nos propres écritures disent tous `2F`). Vraisemblablement recopié depuis la mauvaise colonne d'`Apparts.csv` (dump de référence, non chargé).
+- **Impact 1** : 15 écritures Airbnb postées 28/04→28/07 avec libellé `KLE40-2D` (comptes et montants justes — le code comptable ne sert qu'au libellé, le 411 vient du canal). Correction côté Pennylane = décision Philippe, liste à fournir.
+- **Impact 2** : flux 2 bloqué 29-31/07 (`MAPPING_NOT_FOUND` BLOCKING sur 1 tx de 1 412,70 € → tout le run annulé), 4 versements/66,6 k€ non tracés, **sans alerte** (HTTP 200 sur `blocked` + trigger continuité au mauvais grain, cf. ADR 2026-08-01).
+- **Fix** : `2D`→`2F` dans les 3 CSV + ajout `BGO41-0F` à `Mapping_appart_code.csv` (2e appart actif absent, même bombe à retardement). Commit `8779167`, rev `00079-hqs`. Replay OK : 4 batches, 70 827,56 € équilibrés au centime, 0 bloquant. Couverture vérifiée : 124/124 apparts actifs 2026 mappés.
+- **Restes ouverts** : (a) dériver le code comptable au lieu de le recopier (backlog, cf. Known issues) ; (b) `server.py` renvoie HTTP 200 sur `status="blocked"` → invisible côté Cloud Monitoring ; (c) liste des 15 écritures pour Philippe.
 
 ### 2026-06-24 — Lot B Factures (customer + supplier invoices → BQ)
 - Module `pennylane/invoices_full.py` + job `invoices-full-pull` + scheduler `invoices-full-pull-daily` (6h15 Paris). Tables `pennylane.raw_customer_invoices` (2 383) + `raw_supplier_invoices` (15 650), 100% `ledger_entry_id`. Backfill 2024-07-01. Découverte : `sort` API limité à `id`/`date` → overlap 90j sur `date`. Section "Pipeline Factures" + ADR `decisions.md` 2026-06-24.
