@@ -147,6 +147,28 @@ def test_fee_row_gross_null_route_401():
     )
 
 
+def test_reserve_adjustment_route_401():
+    # Retenue de réserve Adyen (observé 2026-08-05 : −17 901,20 €) : gross
+    # renseigné mais commission NULL, pas de contrepartie client → 401MEWS.
+    entries, _, anomalies = build_entries([
+        make_row(),
+        make_row(
+            transaction_id="RSV1", transaction_type="Reserve adjustment",
+            gross=Decimal("-17901.20"), commission=None, net=Decimal("-17901.20"),
+            payment_matched=False, canal=None, apartment_code=None,
+            guest_name=None, checkout_date=None, bill_id=None, bill_number=None,
+        ),
+    ])
+    assert_balanced(entries)
+    assert any(a.type == "RESERVE_ADJUSTMENT" for a in anomalies)
+    rsv = next(e for e in entries if e.ota_reservation_ref == "RSV1")
+    assert rsv.account == "401MEWS" and rsv.debit == Decimal("17901.20")
+    assert not any(
+        e.ota_reservation_ref == "RSV1" and e.account.startswith("411")
+        for e in entries
+    )
+
+
 def test_canal_booking_emet_unexpected_channel():
     _, _, anomalies = build_entries([make_row(canal="Booking.com")])
     assert any(a.type == "UNEXPECTED_CHANNEL" for a in anomalies)

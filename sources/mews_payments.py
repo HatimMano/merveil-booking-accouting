@@ -265,16 +265,25 @@ class MewsPaymentsSource(Source):
     def _to_reservation(self, row, source_label: str, anomalies: list) -> Reservation:
         tx_id = row["transaction_id"]
 
-        if row["gross"] is None:
-            # Ligne pur frais sans contrepartie client (Commission adjustment /
-            # Platform fee — observé uniquement sur l'ère Stripe, ne devrait plus
-            # apparaître côté Adyen). Convention parser Booking : amount = net,
-            # commission = 0, status "Commission adjustment" → entries.py route
-            # en D/C direct sur 401MEWS, aucune ligne 411.
+        if row["gross"] is None or row["transaction_type"] == "Reserve adjustment":
+            # Ligne sans contrepartie client : pur frais (Commission adjustment /
+            # Platform fee — ère Stripe, gross NULL) ou retenue/restitution de
+            # réserve Adyen (Reserve adjustment — gross = net, commission NULL,
+            # 1er cas observé 2026-08-05 : −17 901,20 €). Convention parser
+            # Booking : amount = net, commission = 0, status "Commission
+            # adjustment" → entries.py route en D/C direct sur 401MEWS, aucune
+            # ligne 411. Pour la réserve : retenue = DEBIT (créance sur Adyen),
+            # release futur = CREDIT symétrique — convention à valider avec
+            # Philippe à la revue.
+            is_reserve = row["transaction_type"] == "Reserve adjustment"
             anomalies.append(Anomaly(
-                type="FEE_TRANSACTION",
+                type="RESERVE_ADJUSTMENT" if is_reserve else "FEE_TRANSACTION",
                 severity=Severity.WARNING,
                 message=(
+                    f"Retenue/restitution de réserve Adyen ({row['net']}€, tx {tx_id}) "
+                    f"— routée sur {MEWS_PAYMENTS_ACCOUNT_SUPPLIER}, convention à "
+                    f"valider avec Philippe."
+                ) if is_reserve else (
                     f"Transaction pur frais '{row['transaction_type']}' "
                     f"({row['net']}€, tx {tx_id}) — routée sur "
                     f"{MEWS_PAYMENTS_ACCOUNT_SUPPLIER} (pas de contrepartie client)."
@@ -405,7 +414,9 @@ class MewsPaymentsSource(Source):
             payment_status=row["account_type"] or "",
             city_tax=Decimal("0"),
             amount=Decimal(row["gross"]),
-            commission=Decimal(row["commission"]),
+            # NULL défensif : un type inconnu sans commission ne doit pas tuer
+            # tout le run — l'écart éventuel est rattrapé par le balance check.
+            commission=Decimal(row["commission"] if row["commission"] is not None else 0),
             payment_charge=Decimal("0"),
             net=Decimal(row["net"]),
             payout_date=row["payout_date"],
