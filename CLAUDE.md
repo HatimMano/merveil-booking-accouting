@@ -390,6 +390,11 @@ Frère de `ledger_full` (Lot A) mais sur les **factures** : endpoints Pennylane 
 
 ## Changelog
 
+### 2026-08-05 — Nouveau type Adyen `Reserve adjustment` : crash du run daily flux 2
+- **Incident** : run 7h planté (`TypeError: conversion from NoneType to Decimal`, alerte Cloud Monitoring OK) sur une transaction jamais vue : **`Reserve adjustment`** −17 901,20 € (payout `caa41345`, gross = net, `commission` NULL) = retenue de réserve Adyen sur le versement. Rien tracé pour le run (rattrapé par replay, overlap 7j).
+- **Fix** (commit `40b7c3b`, rev `00080-zdx`) : branche sans-contrepartie-client élargie (`gross NULL` OU `Reserve adjustment`) → routée **401MEWS** D/C selon signe (retenue = DEBIT = créance sur Adyen, release futur = CREDIT symétrique), anomalie WARNING dédiée `RESERVE_ADJUSTMENT`. + `commission` NULL défensif sur le chemin nominal (un type inconnu ne tue plus le run entier ; l'écart éventuel est bloqué par le balance check du payout). Test `test_reserve_adjustment_route_401` (75/75).
+- ⚠ **Convention comptable à valider avec Philippe à la revue fin août** : comment traite-t-il les retenues de réserve Adyen ? (401MEWS est notre choix par défaut, lettrable au release ; un compte d'attente 471 serait aussi défendable.)
+
 ### 2026-08-01 — Incident mapping KLE40 : flux 2 bloqué 3 jours + 15 écritures Airbnb mal libellées
 - **Cause** : typo `KLE40-2D` (au lieu de `2F`) introduite fin avril 2026 dans les 3 CSV de mapping — le code n'existe dans aucune source amont (Mews, natif Mews→Pennylane, factures fournisseurs et nos propres écritures disent tous `2F`). Vraisemblablement recopié depuis la mauvaise colonne d'`Apparts.csv` (dump de référence, non chargé).
 - **Impact 1** : 15 écritures Airbnb postées 28/04→28/07 avec libellé `KLE40-2D` (comptes et montants justes — le code comptable ne sert qu'au libellé, le 411 vient du canal). Correction côté Pennylane = décision Philippe, liste à fournir.
