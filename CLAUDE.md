@@ -73,7 +73,7 @@ booking-accounting/
 | `sources/booking.py` | `BookingDriveSource` — Flux 1 Booking depuis Drive |
 | `sources/airbnb.py` | `AirbnbDriveSource` — Flux 1 Airbnb depuis Drive (avec hook `enrich_anomalies` pour NON_EUR_CURRENCY) |
 | `parsers/booking.py` | `BookingExcelParser` — parses weekly Booking Excel into `BookingPayoutBatch` objects |
-| `parsers/airbnb.py` | `AirbnbParser` — parses monthly Airbnb Excel into payout batches |
+| `parsers/airbnb.py` | `AirbnbParser` — parses weekly Airbnb Excel into payout batches |
 | `accounting/entries.py` | `generate_entries()` — builds PennyLane accounting lines from reservations |
 | `pennylane/client.py` | `PennyLaneClient` — posts batches to PennyLane API, returns `ledger_entry_line_id` per line |
 | `bigquery/postings.py` | `write_postings()` — append-only trace de chaque ligne postée vers `pennylane.raw_postings` (chantier 1 rapprochement) |
@@ -99,7 +99,7 @@ Flat weekly Excel export from Booking.com extranet. One row per reservation.
 - "Commission adjustment" rows: `net` = net_raw, `amount` = net, all other fields = 0
 
 ## Input format — Airbnb (Excel)
-Monthly Excel from Airbnb. Contains "Payout" header rows followed by their reservations.
+Weekly Excel from Airbnb. Contains "Payout" header rows followed by their reservations.
 - **Row types processed**: `Réservation`, `Régularisation de la résolution`, `Hors réservation`, `Frais d'annulation`, `Remboursement des frais d'annulation`
 - Payout rows mark the start of a new batch
 
@@ -171,7 +171,7 @@ Jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
 | `bank-accounts-pull-daily` | Tous les jours à 6h30 Paris ✅ | Cloud Run **Job** `bank-accounts-pull` (soldes bancaires réels, snapshot append-only → `pennylane.raw_bank_accounts`) — cf. Trésorerie ci-dessous |
 | `mews-payments-daily` | Tous les jours à 7h Paris ✅ | Cloud Run service `booking-pipeline` /process — **flux 2, mode `bq_only=true`** (phase validation : trace BQ seule, ZÉRO POST Pennylane). Au GO Philippe : retirer `bq_only` du body |
 
-Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11, **réellement appliquée le 2026-07-27**). Le schedule fixe n'est pas adapté : les fichiers arrivent à intervalles irréguliers (hebdo Booking, mensuel Airbnb selon dépôt).
+Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11, **réellement appliquée le 2026-07-27**). Les deux flux sont **hebdomadaires** et traités ensemble chaque semaine, mais le dépôt du fichier sur Drive reste irrégulier → lancement manuel plutôt qu'un schedule fixe.
 
 ⚠ **La pause n'avait jamais été appliquée** (constaté 2026-07-27 : aucun `PauseJob` dans l'audit log, rétention 400 j). Les deux crons tiraient donc à blanc — `run_pipeline` sort en `{"status": "skipped"}` quand le dossier Drive est vide, en HTTP 200, **sans aucun log applicatif** : un run à vide est indistinguable d'un run réussi dans les logs. C'est ce qui a rendu le drift invisible pendant 2 mois. Si tu remets un schedule un jour, logue explicitement le skip.
 
