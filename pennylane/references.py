@@ -93,6 +93,29 @@ def transform_customer(c: dict, ingested_at: str) -> dict:
     }
 
 
+def transform_category(c: dict, ingested_at: str) -> dict:
+    return {
+        "id": int(c["id"]),
+        "label": c.get("label"),
+        "direction": c.get("direction"),
+        "analytical_code": c.get("analytical_code"),
+        "category_group_id": int((c.get("category_group") or {}).get("id") or 0) or None,
+        "created_at": c.get("created_at"),
+        "updated_at": c.get("updated_at"),
+        "ingested_at": ingested_at,
+    }
+
+
+def transform_category_group(g: dict, ingested_at: str) -> dict:
+    return {
+        "id": int(g["id"]),
+        "label": g.get("label"),
+        "created_at": g.get("created_at"),
+        "updated_at": g.get("updated_at"),
+        "ingested_at": ingested_at,
+    }
+
+
 def transform_ledger_account(a: dict, ingested_at: str) -> dict:
     return {
         "id": int(a["id"]),
@@ -136,6 +159,20 @@ CUSTOMER_SCHEMA = [
     SF("ingested_at", "TIMESTAMP", mode="REQUIRED"),
 ]
 
+CATEGORY_SCHEMA = [
+    SF("id", "INT64", mode="REQUIRED"), SF("label", "STRING"),
+    SF("direction", "STRING"), SF("analytical_code", "STRING"),
+    SF("category_group_id", "INT64"),
+    SF("created_at", "TIMESTAMP"), SF("updated_at", "TIMESTAMP"),
+    SF("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+]
+
+CATEGORY_GROUP_SCHEMA = [
+    SF("id", "INT64", mode="REQUIRED"), SF("label", "STRING"),
+    SF("created_at", "TIMESTAMP"), SF("updated_at", "TIMESTAMP"),
+    SF("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+]
+
 LEDGER_ACCOUNT_SCHEMA = [
     SF("id", "INT64", mode="REQUIRED"), SF("number", "STRING"),
     SF("label", "STRING"), SF("type", "STRING"), SF("vat_rate", "STRING"),
@@ -151,6 +188,14 @@ KINDS = {
     "customers": ("/customers", "raw_customers", transform_customer, CUSTOMER_SCHEMA, ["name"]),
     "ledger_accounts": ("/ledger_accounts", "raw_ledger_accounts", transform_ledger_account,
                         LEDGER_ACCOUNT_SCHEMA, ["number"]),
+    # Plan analytique (lot 2) : les 5 groupes = les axes (Nature / Adresse /
+    # Source Revenus / Projets transverses / Compta Intern), ~145 catégories.
+    # Les ASSIGNATIONS facture→catégorie sont dans pennylane/invoice_categories.py
+    # (volumétrie différente : 1 appel API par facture).
+    "categories": ("/categories", "raw_categories", transform_category,
+                   CATEGORY_SCHEMA, ["category_group_id"]),
+    "category_groups": ("/category_groups", "raw_category_groups", transform_category_group,
+                        CATEGORY_GROUP_SCHEMA, None),
 }
 
 
