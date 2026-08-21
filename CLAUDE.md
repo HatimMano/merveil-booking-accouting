@@ -169,6 +169,7 @@ Jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
 | `ledger-full-pull-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `ledger-full-pull` (grand livre COMPLET tous comptes, daily incr. overlap 45j → `pennylane.raw_ledger_lines`) — cf. Lot A ci-dessous |
 | `invoices-full-pull-daily` | Tous les jours à 6h15 Paris ✅ | Cloud Run **Job** `invoices-full-pull` (factures clients + fournisseurs, daily incr. overlap 90j → `pennylane.raw_{customer,supplier}_invoices`) — cf. Lot B ci-dessous |
 | `bank-accounts-pull-daily` | Tous les jours à 6h30 Paris ✅ | Cloud Run **Job** `bank-accounts-pull` (soldes bancaires réels, snapshot append-only → `pennylane.raw_bank_accounts`) — cf. Trésorerie ci-dessous |
+| `references-pull-daily` | Tous les jours à **5h45** Paris ✅ | Cloud Run **Job** `references-pull` (référentiels fournisseurs / clients / plan comptable → `pennylane.raw_{suppliers,customers,ledger_accounts}`) — **avant** le ledger 6h et les factures 6h15, pour que le référentiel ne soit jamais en retard sur ce qui le référence. Cf. Référentiels ci-dessous |
 | `mews-payments-daily` | Tous les jours à 7h Paris ✅ | Cloud Run service `booking-pipeline` /process — **flux 2, mode `bq_only=true`** (phase validation : trace BQ seule, ZÉRO POST Pennylane). Au GO Philippe : retirer `bq_only` du body |
 
 Les jobs Airbnb/Booking sont **en PAUSE permanent** (décision 2026-05-11, **réellement appliquée le 2026-07-27**). Les deux flux sont **hebdomadaires** et traités ensemble chaque semaine, mais le dépôt du fichier sur Drive reste irrégulier → lancement manuel plutôt qu'un schedule fixe.
@@ -385,6 +386,21 @@ Frère de `ledger_full` (Lot A) mais sur les **factures** : endpoints Pennylane 
 **Limites** : (1) jointure customer→`raw_ledger_lines` complète sur **2026** (Lot A backfillé 2026-06-24) — antérieur à 2026 partiel tant que `ledger_full --from-date 2025-01-01` pas lancé ; (2) `remaining` fournisseur négatif (convention signe Pennylane = dette) + loyers futurs non échus (max 2026-09-01) → gestion signe/échéance = sujet dbt Phase 2 ; (3) paiements > 90j ratés (rare).
 
 **Run** : daily auto `python -m pennylane.invoices_full` (les 2 types, overlap 90j). Backfill : `--from-date 2024-07-01`. Un seul type : `--kind customer`. Dry-run : `--dry-run`.
+
+---
+
+## Référentiels Pennylane — `references` (Lot 1 contrôle de gestion, 2026-08-21)
+
+Le grand livre (Lot A) et les factures (Lot B) étaient en base mais **nus** : une ligne d'écriture n'expose qu'un `account_number`, une facture qu'un `party_id`. Illisible pour du contrôle de gestion. Cf. ADR `Archides/docs/decisions.md` 2026-08-21 (demande Mickael).
+
+- Script CLI : `pennylane/references.py` (réutilise `PennylaneGLClient`), `--kind suppliers|customers|ledger_accounts|all`, `--dry-run`.
+- Cloud Run Job `references-pull` (image partagée `booking-pipeline`, SA `booking-pipeline-sa`, secret `PENNYLANE_TOKEN`) + scheduler `references-pull-daily` **5h45 Paris**.
+- Tables : `pennylane.raw_suppliers` (1 671) · `raw_customers` (684) · `raw_ledger_accounts` (5 431).
+- **Full pull + MERGE sur `id`**, pas d'incrémental : ce sont des référentiels, petits et sans notion de date. Run complet ~95 s.
+- ⚠️ **Le MERGE ne supprime jamais** — un tiers radié côté Pennylane RESTE en base, pour que les écritures anciennes qui le référencent restent joignables.
+- **Couverture mesurée le 21/08** : factures fournisseurs → nom **99,9 %** · factures clients → nom **99,8 %** · lignes de grand livre → libellé de compte **100 %**.
+- Aval dbt : `stg_pennylane__ledger_accounts` + `stg_pennylane__parties` (union fournisseurs+clients, ids disjoints) → `account_label`/`account_type` sur `stg_pennylane__ledger_lines`, `party_name` sur les deux modèles factures → colonne « Fournisseur »/« Client » en 9.1/9.2.
+- ⚠️⚠️ **Ces référentiels ne portent PAS le code analytique.** Dans l'API v2 la ventilation analytique est accrochée à la **FACTURE** (`/supplier_invoices/{id}/categories`), **jamais** à la ligne d'écriture — `ledger_entry_lines.categories` est vide sur 100 % des 12 000 lignes scannées (juillet→septembre 2026). Le plan est bon (145 catégories, 5 axes : Nature · **Adresse = par appartement** · Source Revenus = par canal · Projets transverses · Compta Intern) mais **la saisie ne suit pas** : ~93 % des factures clients sont catégorisées contre **38 % en juin et 26 % en juillet** côté fournisseurs (58 % / 16 % en montant). Lot 2 (≈1 j : 1 appel API par facture, ~19 k pour le rattrapage) **volontairement non fait** tant que ce trou de saisie n'est pas clarifié avec Philippe — ingérer à 26 % de couverture produirait des totaux faux sans lever la moindre erreur.
 
 ---
 
