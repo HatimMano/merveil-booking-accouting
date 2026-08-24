@@ -20,8 +20,18 @@ passage "payé". Les paiements au-delà de la fenêtre (rares) sont ratés — m
 limite assumée que `ledger_full`.
 
 Champs nested (`invoice_lines`, `payments`, `matched_transactions`) volontairement
-DÉFÉRÉS : non requis pour DSO/impayés/lettrage (qui s'appuient sur les en-têtes +
-`ledger_entry_id`). À brancher si besoin.
+DÉFÉRÉS : ce sont des URLs de sous-ressource (pas des données inline, vérifié
+Phase 0 du 24/08) → les récupérer = un N+1 à ~19k sondes, même coût que le Lot 2.
+À brancher si besoin réel.
+
+Élargissement 2026-08-24 (chantier « Pennylane max data ») : ajout des scalaires
+jetés jusqu'ici — `public_file_url` (le PDF ! URL publique signée, ⚠ ne jamais
+l'exposer telle quelle côté dash — télécharger vers GCS sous IAM avant tout usage
+front), `filename`, `accounting_status`/`reconciled` (supplier), `draft` (customer),
+`transaction_reference`, `currency_amount_before_tax`, `import_source`,
+`e_invoicing` (JSON string — réforme e-invoicing 01/09/2026) + `_raw_payload`.
+Les colonnes sont ajoutées aux tables prod par ALTER TABLE ADD COLUMN IF NOT EXISTS
+(idempotent, jamais de recreate).
 
 Usage CLI :
   PENNYLANE_TOKEN=xxx python -m pennylane.invoices_full                       # daily incr (today-90j), les 2 types
@@ -31,6 +41,7 @@ Usage CLI :
 """
 
 import argparse
+import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -102,6 +113,23 @@ def transform_invoice(inv: dict, party_field: str, ingested_at: str) -> dict:
         "updated_at": inv.get("updated_at"),
         "archived_at": inv.get("archived_at"),
         "ingested_at": ingested_at,
+        # — élargissement 2026-08-24 (les champs absents d'un kind restent NULL) —
+        "public_file_url": inv.get("public_file_url"),
+        "filename": inv.get("filename"),
+        "accounting_status": inv.get("accounting_status"),
+        "reconciled": inv.get("reconciled"),
+        "draft": inv.get("draft"),
+        "transaction_reference": inv.get("transaction_reference"),
+        "currency_amount_before_tax": (
+            str(inv["currency_amount_before_tax"])
+            if inv.get("currency_amount_before_tax") is not None else None
+        ),
+        "import_source": inv.get("import_source"),
+        "e_invoicing": (
+            json.dumps(inv["e_invoicing"], ensure_ascii=False)
+            if inv.get("e_invoicing") is not None else None
+        ),
+        "_raw_payload": json.dumps(inv, ensure_ascii=False),
     }
 
 
@@ -126,16 +154,45 @@ def bq_schema() -> list[bigquery.SchemaField]:
         bigquery.SchemaField("updated_at", "TIMESTAMP"),
         bigquery.SchemaField("archived_at", "TIMESTAMP"),
         bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+        # — élargissement 2026-08-24 (nullable, ALTER sur les tables prod) —
+        bigquery.SchemaField("public_file_url", "STRING"),
+        bigquery.SchemaField("filename", "STRING"),
+        bigquery.SchemaField("accounting_status", "STRING"),
+        bigquery.SchemaField("reconciled", "BOOL"),
+        bigquery.SchemaField("draft", "BOOL"),
+        bigquery.SchemaField("transaction_reference", "STRING"),
+        bigquery.SchemaField("currency_amount_before_tax", "NUMERIC"),
+        bigquery.SchemaField("import_source", "STRING"),
+        bigquery.SchemaField("e_invoicing", "STRING"),
+        bigquery.SchemaField("_raw_payload", "STRING"),
     ]
+
+# Colonnes ajoutées après la création des tables prod (2026-08-24) : ajoutées par
+# ALTER idempotent dans ensure_target_table — jamais de recreate sur ces tables.
+_ADDED_COLUMNS = {
+    "public_file_url": "STRING", "filename": "STRING", "accounting_status": "STRING",
+    "reconciled": "BOOL", "draft": "BOOL", "transaction_reference": "STRING",
+    "currency_amount_before_tax": "NUMERIC", "import_source": "STRING",
+    "e_invoicing": "STRING", "_raw_payload": "STRING",
+}
 
 
 def ensure_target_table(bq: bigquery.Client, table: str) -> None:
     table_ref = f"{BQ_PROJECT}.{BQ_DATASET}.{table}"
     try:
-        bq.get_table(table_ref)
+        existing = bq.get_table(table_ref)
+        have = {f.name for f in existing.schema}
+        missing = [c for c in _ADDED_COLUMNS if c not in have]
+        if missing:
+            clauses = ", ".join(
+                f"ADD COLUMN IF NOT EXISTS {c} {_ADDED_COLUMNS[c]}" for c in missing
+            )
+            bq.query(f"ALTER TABLE `{table_ref}` {clauses}").result()
+            logger.info("ALTER %s : +%d colonnes (%s)", table, len(missing), ", ".join(missing))
         return
-    except Exception:
-        pass
+    except Exception as e:
+        if "Not found" not in str(e):
+            raise
     t = bigquery.Table(table_ref, schema=bq_schema())
     t.time_partitioning = bigquery.TimePartitioning(
         type_=bigquery.TimePartitioningType.MONTH, field="date"
