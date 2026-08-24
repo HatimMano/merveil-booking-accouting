@@ -170,6 +170,7 @@ Jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
 | `invoices-full-pull-daily` | Tous les jours à 6h15 Paris ✅ | Cloud Run **Job** `invoices-full-pull` (factures clients + fournisseurs, daily incr. overlap 90j → `pennylane.raw_{customer,supplier}_invoices`) — cf. Lot B ci-dessous |
 | `bank-accounts-pull-daily` | Tous les jours à 6h30 Paris ✅ | Cloud Run **Job** `bank-accounts-pull` (soldes bancaires réels, snapshot append-only → `pennylane.raw_bank_accounts`) — cf. Trésorerie ci-dessous |
 | `references-pull-daily` | Tous les jours à **5h45** Paris ✅ | Cloud Run **Job** `references-pull` (référentiels fournisseurs / clients / plan comptable **+ plan analytique** `raw_{categories,category_groups}` depuis le 21/08 → `pennylane.raw_{suppliers,customers,ledger_accounts,categories,category_groups}`) — **avant** le ledger 6h et les factures 6h15, pour que le référentiel ne soit jamais en retard sur ce qui le référence. Cf. Référentiels ci-dessous |
+| `transactions-pull-daily` | Tous les jours à **6h35** Paris ✅ | Cloud Run **Job** `transactions-pull` (transactions bancaires réelles, overlap 45j → `pennylane.raw_transactions`) — cf. section Transactions ci-dessous |
 | `invoice-categories-pull-daily` | Tous les jours à **6h45** Paris ✅ | Cloud Run **Job** `invoice-categories-pull` (**lot 2** : ventilation analytique par facture → `pennylane.raw_invoice_categories`, fenêtre 90j sur la date de facture, ~1 500 sondes/run ≈ 8 min, task-timeout 1800) — **après** le merge des factures 6h15 (les ids sondés viennent de BQ). Cf. section Lot 2 ci-dessous |
 | `mews-payments-daily` | Tous les jours à 7h Paris ✅ | Cloud Run service `booking-pipeline` /process — **flux 2, mode `bq_only=true`** (phase validation : trace BQ seule, ZÉRO POST Pennylane). Au GO Philippe : retirer `bq_only` du body |
 
@@ -407,6 +408,42 @@ Le grand livre (Lot A) et les factures (Lot B) étaient en base mais **nus** : u
 
 ---
 
+## Transactions bancaires — `transactions` (chantier « max data », 2026-08-24)
+
+Les mouvements bancaires réels (« combien on a payé à Leroy Merlin ? » — demande Mickael),
+via `GET /transactions`. Cf. plan `Archides/docs/plans/pennylane-max-data-2026-08-21.md`
+(Phase 0 = inventaire endpoints sondé le 24/08, dedans).
+
+- Script CLI : `pennylane/transactions.py` (réutilise `PennylaneGLClient`). Job `transactions-pull`
+  + scheduler `transactions-pull-daily` **6h35 Paris**. Table `pennylane.raw_transactions`
+  (partition MONTH `date`, cluster `bank_account_id`, MERGE sur `id`).
+- ⭐ **Mécanique ≠ Lots A/B** : le **filtre serveur `date` existe** (syntaxe LISTE :
+  `filter=[{"field":"date","operator":"gteq","value":"…"}]` — l'ancienne syntaxe objet renvoie 400,
+  d'où le « l'API ignore les filtres » historique). Vérifié réellement appliqué. `sort` limité à `id`
+  → pas de scan DESC/early-stop ici. ⚠ `updated_at` n'est PAS filtrable → l'**overlap 45j reste
+  indispensable** (rapprochements/catégorisations tardifs re-capturés par re-scan de fenêtre).
+- **Backfill intégral fait le 24/08** : 26 933 transactions (2024-01-03 → today, ~2 min d'API).
+  Contrôles : 2024=4 647 / 2025=15 179 / 2026=7 107 ; **99,7 % portent la ventilation analytique
+  INLINE** (`categories` REPEATED — contrairement aux factures où c'est un N+1, cf. Lot 2) ;
+  `supplier_id` rapproché sur ~25 % (le lien facture↔transaction passe surtout par
+  `matched_invoices`, sous-ressource non ingérée).
+- Champs notables : `fee`, `outstanding_balance`, `interbank_code`, `pro_account_employee` +
+  `pro_account_card` (dépenses carte par employé), `attachment_required`, `_raw_payload` JSON.
+- ⚠ Backlog noté (PAS fait) : les Lots A/B pourraient abandonner leur scan DESC au profit du filtre
+  serveur — gain réel seulement sur les backfills par tranche, ne pas refactorer sans raison.
+
+### Élargissement factures (même session 24/08)
+`invoices_full.py` : **+10 colonnes** scalaires jetées jusqu'ici — `public_file_url` (**le PDF**,
+URL publique signée — ⚠ ne JAMAIS l'exposer telle quelle côté dash, télécharger vers GCS sous IAM
+d'abord), `filename`, `accounting_status`/`reconciled`/`import_source` (supplier), `draft`
+(customer), `transaction_reference`, `currency_amount_before_tax`, `e_invoicing` (JSON string —
+réforme 01/09/2026), `_raw_payload`. Ajoutées aux tables prod par **ALTER idempotent** dans
+`ensure_target_table` (jamais de recreate). Backfill complet re-mergé le 24/08 (2 402 customer +
+16 736 supplier, couverture PDF ~100 %). Les nested `invoice_lines`/`payments`/`matched_transactions`
+restent des **URLs de sous-ressource** (N+1 ~19k sondes = coût Lot 2) → déférés.
+
+---
+
 ## Lot 2 — Ventilation analytique par facture (`invoice_categories`, 2026-08-21)
 
 Le code analytique n'existe **que sur la facture** (`/{supplier,customer}_invoices/{id}/categories`) → 1 appel API par facture, seule volumétrie coûteuse du chantier contrôle de gestion. Cf. ADR 21/08 (×2).
@@ -421,6 +458,11 @@ Le code analytique n'existe **que sur la facture** (`/{supplier,customer}_invoic
 ---
 
 ## Changelog
+
+### 2026-08-24 — Transactions bancaires + élargissement factures + backfill ledger 2024
+- `pennylane/transactions.py` → `raw_transactions` (26 933, 2024-01→), job `transactions-pull` + scheduler 6h35. Filtre serveur `date` (syntaxe liste) découvert et utilisé — cf. section Transactions.
+- `invoices_full.py` +10 colonnes (dont `public_file_url` = PDF) via ALTER idempotent, backfill re-mergé.
+- Backfill `raw_ledger_lines` étendu à 2024-01-01 (chantier contestations 2024 — la RC conteste tout l'historique).
 
 ### 2026-08-05 — Nouveau type Adyen `Reserve adjustment` : crash du run daily flux 2
 - **Incident** : run 7h planté (`TypeError: conversion from NoneType to Decimal`, alerte Cloud Monitoring OK) sur une transaction jamais vue : **`Reserve adjustment`** −17 901,20 € (payout `caa41345`, gross = net, `commission` NULL) = retenue de réserve Adyen sur le versement. Rien tracé pour le run (rattrapé par replay, overlap 7j).
