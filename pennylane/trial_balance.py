@@ -79,7 +79,14 @@ def months_between(first: date, last: date) -> list[tuple[date, date]]:
 
 
 def open_fiscal_periods(bq: bigquery.Client) -> tuple[date, date]:
-    """Bornes des exercices OUVERTS (raw_fiscal_years), sinon année civile courante."""
+    """Bornes des exercices OUVERTS (raw_fiscal_years), sinon année civile courante.
+
+    ⚠️ La borne haute va jusqu'à la FIN de l'exercice, pas à aujourd'hui : des
+    écritures datées dans le futur existent (loyers d'avance, prévisions —
+    ~372 k€ sur sept-déc 2026 mesurés le 25/08) et la balance les porte. Borner
+    à today les laissait sans contrepartie dans `dash_finance_reco_balance`
+    (verdict `absent_de_la_balance` au lieu d'une vraie comparaison).
+    """
     today = datetime.now(timezone.utc).date()
     try:
         rows = list(bq.query(
@@ -87,10 +94,10 @@ def open_fiscal_periods(bq: bigquery.Client) -> tuple[date, date]:
             f"FROM `{BQ_PROJECT}.{BQ_DATASET}.raw_fiscal_years` WHERE status = 'open'"
         ).result())
         if rows and rows[0].lo:
-            return rows[0].lo, min(rows[0].hi or today, today)
+            return rows[0].lo, rows[0].hi or today
     except Exception as e:
         logger.warning("raw_fiscal_years illisible (%s) → repli année civile", str(e)[:100])
-    return date(today.year, 1, 1), today
+    return date(today.year, 1, 1), date(today.year, 12, 31)
 
 
 def fetch_period(client: PennylaneGLClient, start: date, end: date) -> list[dict]:

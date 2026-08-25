@@ -135,6 +135,48 @@ def merge_to_bq(rows: list[dict], bq: bigquery.Client) -> dict:
     return {"merged": len(rows)}
 
 
+def purge_stale_in_window(bq: bigquery.Client, from_date: str, run_start_iso: str) -> dict:
+    """Archive puis supprime les lignes ORPHELINES de la fenêtre qui vient d'être re-tirée.
+
+    ⭐ Pourquoi (élucidé 2026-08-25, ADR) : Pennylane SUPPRIME et RE-KEYE des lignes
+    en continu (corrections du cabinet, re-keying automatique — observé : 3
+    générations de `ledger_entry_line_id` pour la même écriture en 2 jours). Le
+    MERGE ne supprimant jamais, ces générations mortes s'accumulaient : **+14,4 M€
+    de débits fantômes** sur 2026, prouvés au centime contre la balance générale
+    (résidu 0,00 € sur 10 mois) puis par sonde API directe (8/8).
+
+    Mécanique : le scan DESC vient de couvrir TOUTE la fenêtre `date >= from_date`
+    (early-stop seulement sous la borne) → une ligne de cette fenêtre que le MERGE
+    n'a pas rafraîchie (`ingested_at < run_start`) n'a pas été renvoyée par l'API
+    = elle n'existe plus côté Pennylane. On l'archive dans
+    `raw_ledger_lines_orphans` (trace d'audit : ce sont des écritures SUPPRIMÉES,
+    ex. les 41 lignes Iavotsoa effacées par Philippe) puis on la supprime.
+
+    ⚠️ N'appeler qu'APRÈS un merge complet réussi : sur un scan partiel, les lignes
+    non vues passeraient pour supprimées. L'ordre fetch → merge → purge du `run()`
+    garantit qu'une exception amont court-circuite la purge.
+    ⚠️ Ne couvre que la fenêtre re-tirée : une ligne supprimée dans un mois ANCIEN
+    (hors overlap 45j) reste jusqu'au prochain backfill — c'est précisément ce que
+    `dash_finance_reco_balance` (dbt) surveille désormais.
+    """
+    target = f"{BQ_PROJECT}.{BQ_DATASET}.{BQ_TABLE}"
+    archive = f"{BQ_PROJECT}.{BQ_DATASET}.{BQ_TABLE}_orphans"
+    res = bq.query(f"""
+    BEGIN TRANSACTION;
+    INSERT INTO `{archive}`
+    SELECT *, CURRENT_TIMESTAMP() AS orphan_detected_at
+    FROM `{target}` WHERE date >= '{from_date}' AND ingested_at < '{run_start_iso}';
+    DELETE FROM `{target}` WHERE date >= '{from_date}' AND ingested_at < '{run_start_iso}';
+    COMMIT TRANSACTION;
+    SELECT COUNT(*) AS n FROM `{archive}` WHERE orphan_detected_at >= '{run_start_iso}';
+    """).result()
+    purged = list(res)[0].n
+    if purged:
+        logger.info("purge fenêtre %s→ : %d lignes orphelines archivées puis supprimées",
+                    from_date, purged)
+    return {"purged": purged}
+
+
 def run(from_date: str | None = None, overlap_days: int = OVERLAP_DAYS,
         dry_run: bool = False) -> dict:
     token = os.environ.get("PENNYLANE_TOKEN")
@@ -173,6 +215,10 @@ def run(from_date: str | None = None, overlap_days: int = OVERLAP_DAYS,
 
     bq = bigquery.Client(project=BQ_PROJECT)
     res = merge_to_bq(rows, bq)
+    # Après merge complet seulement (cf. docstring) — et jamais sur un scan vide,
+    # symptôme d'un problème amont qui ferait passer toute la fenêtre pour supprimée.
+    if rows:
+        res.update(purge_stale_in_window(bq, from_date, ingested_at))
     return {"from": from_date, "scanned": total, "kept": len(rows), **res}
 
 
