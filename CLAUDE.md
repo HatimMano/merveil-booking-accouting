@@ -457,7 +457,102 @@ Le code analytique n'existe **que sur la facture** (`/{supplier,customer}_invoic
 
 ---
 
+## ⭐ Lot 3 « max data » — balance, en-têtes, rapprochement facture→banque (2026-08-25)
+
+Cf. plan `Archides/docs/plans/pennylane-max-data-2026-08-21.md` + ADR `decisions.md` 25/08.
+L'exploration des endpoints est **terminée** — les mesures ci-dessous sont faites, ne pas re-sonder.
+
+### Ce qui a été ingéré, et ce qui a été volontairement écarté
+
+| Sous-ressource facture | Remplissage mesuré (60 factures) | Décision |
+|---|---|---|
+| `matched_transactions` | **85 %** | ✅ ingéré — `invoice_matched.py` |
+| `invoice_lines` | 100 % mais **inutile** | ⛔ écarté (voir ci-dessous) |
+| `payments` | **0 %** | ⛔ jamais alimenté chez nous |
+| `categories` | 100 % | ⛔ déjà couvert par le lot 2 |
+
+⛔ **`invoice_lines` n'est PAS le détail fournisseur, c'est la ventilation TVA.** 58 factures
+sur 60 n'ont qu'**une seule ligne**, et **2 % des lignes portent un libellé** (`label` et
+`description` vides, seul `vat_rate` varie). Les rares multi-lignes ne le sont que quand la
+facture mélange plusieurs taux. Le HT/TVA global étant déjà dans les scalaires, un N+1 de 19 k
+sondes n'apporterait rien sur 97 % des factures → **l'extraction Gemini garde tout son objet**,
+le détail réel (split loyer/charges, code appartement) n'existe que dans le PDF.
+
+### `transactions.py` — ⚠ ne répond PAS à « combien on a payé à X »
+
+Mesuré en base : `supplier_id` n'est rapproché que sur **13 % (2024) / 22 % (2025) / 27 % (2026)**
+des mouvements. Trois quarts des transactions 2026 ne portent aucun fournisseur. Le chemin fiable
+est `invoice_matched.py`, **côté facture**. L'analytique inline (99 %) reste excellente pour
+répondre par **poste de dépense**.
+
+### Nouveaux modules
+
+| Module | Table | Job / scheduler | Note |
+|---|---|---|---|
+| `trial_balance.py` | `raw_trial_balance` | `trial-balance-pull` · 6h50 | Balance générale au grain **mois** |
+| `ledger_entries.py` | `raw_ledger_entries` | `ledger-entries-pull` · 6h05 | En-têtes (125 220 backfillées) |
+| `invoice_matched.py` | `raw_invoice_matched_transactions` | `invoice-matched-pull` · 6h55 | N+1 piloté par BQ |
+| `invoice_pdfs.py` | `raw_invoice_files` + GCS | `invoice-pdfs-pull` · 7h00 | Fetcher PDF, **borné 90 j** |
+| `references.py` (+2 kinds) | `raw_journals`, `raw_fiscal_years` | job existant · 5h45 | Référentiels |
+
+### Points de conception à ne pas défaire
+
+- ⭐ **`trial_balance` est ADDITIVE par mois et ÉQUILIBRÉE** (vérifié : somme des 3 mois de Q1 2026
+  = balance Q1 au centime sur 378 comptes ; Σ débits = Σ crédits, écart 0,00 €). D'où le grain mois :
+  n'importe quelle période se reconstitue par somme, et le déséquilibre est un contrôle gratuit
+  (`check_balanced()` logue un WARNING).
+- ⚠ **MERGE sur clé naturelle `(period_start, account_number)`, pas un snapshot append** : l'endpoint
+  n'a pas d'`id` mais a une clé stable ; un append quotidien écrirait ~8 000 lignes pour ré-affirmer
+  les mêmes montants. Bénéfice de bord : un mois d'exercice **clos** dont le `snapshot_at` bouge =
+  écriture rétroactive sur période fermée.
+- ⭐ **La re-sonde du rapprochement est pilotée par BQ, PAS par la fenêtre de date.** Une facture
+  payée à 120 jours sort de l'overlap 90 j **avant** que son rapprochement n'arrive, et `updated_at`
+  n'est pas filtrable côté API. Le daily sonde donc la fenêtre 90 j **plus** toutes les factures
+  encore sans rapprochement, dans une fenêtre de rattrapage d'un an. ⚠ Ce plafond est **journalisé
+  à chaque run** (`abandonnées`) — une borne ne doit jamais se lire comme une couverture complète.
+- ⚠ **`public_file_url` expire en moins de ~25 min** et Pennylane en resigne une différente à chaque
+  GET : `invoice_pdfs.py` re-sonde la facture par id juste avant de télécharger (2 appels/doc).
+  Ne jamais « optimiser » en réutilisant l'URL stockée en BQ — elle renvoie des 400 silencieux.
+- ⚠ **Périmètre PDF borné à 90 jours** (arbitrage Hatim 25/08) : l'historique complet = ~16,7k
+  documents ≈ 4 h de fetch. `--all` lève la borne, par tranches de préférence.
+- ⚠ Le fetcher ne retente pas les statuts terminaux (`no_url`, `too_big`) mais **retente les
+  `error`** — un blip réseau ne condamne pas un document.
+
+### ⚠️⚠️ Écart grand livre ↔ balance : CONSTATÉ, NON EXPLIQUÉ
+
+`dash_finance_reco_balance` (dbt) confronte les deux. **2024 réconcilie à 0,00 € sur 159 895 982 €**
+(3 111 couples compte-mois identiques), 2025 à +0,4 % (15 comptes), mais **2026 porte +14,0 M€ de
+débits de plus côté grand livre** — nul jusqu'en mars, explosant à partir d'**avril**, le mois exact
+où `raw_transactions` diverge aussi des lignes 512.
+
+⛔ **Deux correctifs testés et RÉFUTÉS le 25/08, ne pas les reprendre** :
+1. Dédupliquer les lignes re-keyées (même `ledger_entry_id`, plusieurs générations de
+   `ledger_entry_line_id`) → écarte aussi des lignes légitimes, **2024 passe de 0 à −33 422 €**.
+2. Exclure le journal natif Mews `3605247` → la balance l'**inclut**, l'écart 2024 creuse à −17,6 M€.
+
+→ Aucune correction n'est appliquée en amont. L'écart est **exposé**, pas masqué. À instruire avec
+Philippe (piste : le MERGE de l'ETL ne supprime jamais, une écriture effacée côté Pennylane reste).
+
+### ⚠️ Gotcha déploiement — binding `run.invoker` sur CHAQUE nouveau job
+
+Le scheduler `transactions-pull-daily` créé le 24/08 échouait en **PERMISSION_DENIED depuis sa
+création** : le job Cloud Run n'avait aucune policy IAM, donc `booking-pipeline-sa` était refusé à
+chaque tentative. `raw_transactions` est restée figée sur son backfill manuel **sans aucun signal**.
+Deux SA d'invocation coexistent (`booking-pipeline-sa` pour transactions/invoices/factures,
+`scheduler-invoker` pour ledger/categories) → toujours poser le binding **avant** de créer le
+scheduler, puis vérifier `status.code` vide dans `gcloud scheduler jobs list` **et** une exécution
+réelle dans `gcloud run jobs executions list`.
+⚠ Piège zsh au passage : `$3:run` est interprété comme le modificateur `:r` → utiliser `${3}:run`.
+
+
+---
+
 ## Changelog
+
+### 2026-08-25 — Lot 3 max data : balance, en-têtes d'écriture, rapprochement facture→banque, fetcher PDF
+- `trial_balance.py` / `ledger_entries.py` / `invoice_matched.py` / `invoice_pdfs.py` + journals & fiscal_years dans `references.py`. 5 jobs + schedulers (6h05 → 7h00). Cf. section dédiée ci-dessus.
+- Backfills : balance 8 637 lignes (32 mois), en-têtes 125 220, PDF 1 359 (90 j).
+- ⚠ Correction d'un défaut du 24/08 : le scheduler `transactions-pull-daily` n'avait jamais tourné (binding `run.invoker` manquant sur le job).
 
 ### 2026-08-24 — Transactions bancaires + élargissement factures + backfill ledger 2024
 - `pennylane/transactions.py` → `raw_transactions` (26 933, 2024-01→), job `transactions-pull` + scheduler 6h35. Filtre serveur `date` (syntaxe liste) découvert et utilisé — cf. section Transactions.
