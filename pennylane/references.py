@@ -116,6 +116,28 @@ def transform_category_group(g: dict, ingested_at: str) -> dict:
     }
 
 
+def transform_journal(j: dict, ingested_at: str) -> dict:
+    return {
+        "id": int(j["id"]),
+        "code": j.get("code"),
+        "label": j.get("label"),
+        "type": j.get("type"),
+        "ingested_at": ingested_at,
+    }
+
+
+def transform_fiscal_year(f: dict, ingested_at: str) -> dict:
+    return {
+        "id": int(f["id"]),
+        "start": f.get("start"),
+        "finish": f.get("finish"),
+        "status": f.get("status"),
+        "created_at": f.get("created_at"),
+        "updated_at": f.get("updated_at"),
+        "ingested_at": ingested_at,
+    }
+
+
 def transform_ledger_account(a: dict, ingested_at: str) -> dict:
     return {
         "id": int(a["id"]),
@@ -182,6 +204,19 @@ LEDGER_ACCOUNT_SCHEMA = [
     SF("ingested_at", "TIMESTAMP", mode="REQUIRED"),
 ]
 
+JOURNAL_SCHEMA = [
+    SF("id", "INT64", mode="REQUIRED"), SF("code", "STRING"),
+    SF("label", "STRING"), SF("type", "STRING"),
+    SF("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+]
+
+FISCAL_YEAR_SCHEMA = [
+    SF("id", "INT64", mode="REQUIRED"), SF("start", "DATE"), SF("finish", "DATE"),
+    SF("status", "STRING"),
+    SF("created_at", "TIMESTAMP"), SF("updated_at", "TIMESTAMP"),
+    SF("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+]
+
 # kind -> (endpoint, table, transform, schema, clustering)
 KINDS = {
     "suppliers": ("/suppliers", "raw_suppliers", transform_supplier, SUPPLIER_SCHEMA, ["name"]),
@@ -196,6 +231,13 @@ KINDS = {
                    CATEGORY_SCHEMA, ["category_group_id"]),
     "category_groups": ("/category_groups", "raw_category_groups", transform_category_group,
                         CATEGORY_GROUP_SCHEMA, None),
+    # Lot 3 (25/08). `journals` dé-magifie les ids de journal codés en dur un peu
+    # partout (3605247 = natif Mews, 5488931 = saisie Mews Payments de Philippe,
+    # 6365357 = « OD Encaissement Duve »). `fiscal_years` porte le statut
+    # closed/open : borne les backfills et évite d'alerter sur une période close.
+    "journals": ("/journals", "raw_journals", transform_journal, JOURNAL_SCHEMA, ["code"]),
+    "fiscal_years": ("/fiscal_years", "raw_fiscal_years", transform_fiscal_year,
+                     FISCAL_YEAR_SCHEMA, None),
 }
 
 
