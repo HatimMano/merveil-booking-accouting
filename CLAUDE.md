@@ -518,20 +518,30 @@ répondre par **poste de dépense**.
 - ⚠ Le fetcher ne retente pas les statuts terminaux (`no_url`, `too_big`) mais **retente les
   `error`** — un blip réseau ne condamne pas un document.
 
-### ⚠️⚠️ Écart grand livre ↔ balance : CONSTATÉ, NON EXPLIQUÉ
+### ⭐⭐ Écart grand livre ↔ balance : ÉLUCIDÉ ET RÉSORBÉ (25/08 soir, ADR)
 
-`dash_finance_reco_balance` (dbt) confronte les deux. **2024 réconcilie à 0,00 € sur 159 895 982 €**
-(3 111 couples compte-mois identiques), 2025 à +0,4 % (15 comptes), mais **2026 porte +14,0 M€ de
-débits de plus côté grand livre** — nul jusqu'en mars, explosant à partir d'**avril**, le mois exact
-où `raw_transactions` diverge aussi des lignes 512.
+Les +14,4 M€ étaient des **lignes ORPHELINES** — écritures supprimées ou re-keyées côté Pennylane
+(corrections du cabinet, re-keying automatique : 3 générations de `ledger_entry_line_id` pour la
+même écriture en 2 jours), conservées à vie par le MERGE. **Preuve sans hypothèse** : les lignes
+dont `ingested_at` précède le backfill complet du 24/08 n'ont pas été renvoyées par l'API → leur
+somme égale l'écart à **0,00 € près sur 10 mois consécutifs** ; sonde API directe (`filter id eq`) :
+8/8 cohérentes. Un résidu exactement nul exclut aussi un backfill troué.
 
-⛔ **Deux correctifs testés et RÉFUTÉS le 25/08, ne pas les reprendre** :
-1. Dédupliquer les lignes re-keyées (même `ledger_entry_id`, plusieurs générations de
-   `ledger_entry_line_id`) → écarte aussi des lignes légitimes, **2024 passe de 0 à −33 422 €**.
-2. Exclure le journal natif Mews `3605247` → la balance l'**inclut**, l'écart 2024 creuse à −17,6 M€.
+**Geste** : one-shot **12 040 lignes / 14,42 M€** archivées dans `raw_ledger_lines_orphans` (trace
+d'audit — ce sont des écritures EFFACÉES, ex. les 41 lignes Iavotsoa supprimées par Philippe) puis
+purgées · **`purge_stale_in_window`** dans `ledger_full.py` = purge auto quotidienne de la fenêtre
+re-tirée (jamais sur scan vide, jamais avant merge). Premier run réel : 44 de plus.
+**Résultat : réco à 0,00 € sur 2024, 2025 ET 2026** (8 680 couples compte-mois).
 
-→ Aucune correction n'est appliquée en amont. L'écart est **exposé**, pas masqué. À instruire avec
-Philippe (piste : le MERGE de l'ETL ne supprime jamais, une écriture effacée côté Pennylane reste).
+⛔ **Pistes réfutées avant la bonne, ne pas les reprendre** : dédup par (entry, compte, montant) —
+une orpheline n'a pas toujours de jumelle vivante, seul le **test d'existence** contre l'API vaut
+(2024 passait de 0 à −33 422 €) · exclusion du journal natif 3605247 (la balance l'inclut, −17,6 M€).
+
+⚠ **Limites à connaître** : la purge quotidienne ne couvre que la fenêtre 45 j — une suppression
+dans un mois ANCIEN reste jusqu'au prochain backfill (`--from-date`, la purge suit la fenêtre
+tirée) ; `dash_finance_reco_balance` la détecte entre-temps. **Même défaut latent, non traité**,
+sur `raw_{supplier,customer}_invoices` (les 404 des sondes matched = factures supprimées) et
+`raw_transactions` — à purger sur le même modèle si besoin.
 
 ### ⚠️ Gotcha déploiement — binding `run.invoker` sur CHAQUE nouveau job
 
@@ -548,6 +558,11 @@ réelle dans `gcloud run jobs executions list`.
 ---
 
 ## Changelog
+
+### 2026-08-25 (soir) — Écart grand livre élucidé (orphelines) + purge auto + fix storage
+- `purge_stale_in_window` dans `ledger_full.py` + one-shot 12 040 orphelines → réco balance à 0,00 € sur 2024-2026. Cf. section dédiée + ADR.
+- `trial_balance.py` : périodes étendues à la fin de l'exercice ouvert (écritures futures ~372 k€).
+- `google-cloud-storage` ajouté au requirements (le fetcher PDF plantait à l'import en prod). ⚠ Un job Cloud Run épingle son digest d'image : `gcloud run jobs update --image` obligatoire après un rebuild qui le concerne (invoice-pdfs-pull, ledger-full-pull, trial-balance-pull re-pointés).
 
 ### 2026-08-25 — Lot 3 max data : balance, en-têtes d'écriture, rapprochement facture→banque, fetcher PDF
 - `trial_balance.py` / `ledger_entries.py` / `invoice_matched.py` / `invoice_pdfs.py` + journals & fiscal_years dans `references.py`. 5 jobs + schedulers (6h05 → 7h00). Cf. section dédiée ci-dessus.
