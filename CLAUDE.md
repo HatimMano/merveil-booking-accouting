@@ -162,8 +162,8 @@ See `config/settings.py` for full mapping. Key codes:
 Jobs GCP Cloud Scheduler dans `europe-west1`, projet `merveil-data-warehouse` :
 | Job | Schedule | Cible |
 |---|---|---|
-| `airbnb-pipeline-daily` | (en pause) | Cloud Run service `booking-pipeline` /process (Airbnb) |
-| `booking-pipeline-weekly` | (en pause) | Cloud Run service `booking-pipeline` /process (Booking) |
+| `airbnb-pipeline-daily` | `0 9-13 * * 1-5` Paris ✅ | Cloud Run service `booking-pipeline` /process (Airbnb) — polling du dossier d'intake, cf. § Déclenchement |
+| `booking-pipeline-weekly` | `0 9-13 * * 1-5` Paris ✅ | Cloud Run service `booking-pipeline` /process (Booking) — polling du dossier d'intake, cf. § Déclenchement (nom « weekly » historique : la cadence est désormais horaire en heures ouvrées) |
 | `lettering-sim-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `lettering-sim` (simulation lettrage Airbnb+Booking sur 60j) |
 | `grand-livre-pull-monthly` | 5 du mois à 7h Paris ✅ | Cloud Run **Job** `grand-livre-pull` (pull comptes 6041/6042/60472 du mois précédent → `pennylane.raw_grand_livre`) |
 | `ledger-full-pull-daily` | Tous les jours à 6h Paris ✅ | Cloud Run **Job** `ledger-full-pull` (grand livre COMPLET tous comptes, daily incr. overlap 45j → `pennylane.raw_ledger_lines`) — cf. Lot A ci-dessous |
@@ -697,3 +697,34 @@ réelle dans `gcloud run jobs executions list`.
 - Multi-CSV input (1 file per apartment, `{id}-{payout_id}.csv`)
 - Single PennyLane entry per payout batch
 - Airbnb Excel pipeline (monthly, grouped by Payout rows)
+
+## Déclenchement Airbnb / Booking (2026-09-08)
+
+Le dépôt du xlsx dans `DRIVE_FOLDER_AIRBNB` / `DRIVE_FOLDER_BOOKING` est fait par la compta, en général entre 9 h et 13 h en semaine. Avant le 2026-09-08 : mail à Hatim → `POST /process` manuel (dry_run puis run réel). Depuis, les deux schedulers sont **ENABLED** en `0 9-13 * * 1-5` (Europe/Paris) et pollent leur dossier — un dépôt part donc tout seul dans l'heure, sans revue humaine préalable.
+
+| Job | Dossier d'intake | Rythme réel des dépôts |
+|---|---|---|
+| `airbnb-pipeline-daily` | `DRIVE_FOLDER_AIRBNB` | hebdo |
+| `booking-pipeline-weekly` | `DRIVE_FOLDER_BOOKING` | hebdo (nom du job historique — la cadence du *scheduler* est horaire, pas le rythme des dépôts) |
+
+Le polling quotidien évite d'avoir à deviner le jour de dépôt : les jours sans fichier sont des no-op.
+
+**Pas de push Drive** : `changes.watch` impose un domaine de callback vérifié chez Google (impossible sur `*.run.app`) + un renouvellement de canal ≤ 24 h ; Eventarc n'a pas de source Drive ; Apps Script n'a pas de trigger `onFileAdded` et son ID token n'a pas la bonne audience pour un Cloud Run authentifié. Le polling est le bon compromis ici.
+
+**Pourquoi c'est sûr de poller** : dossier vide → `{"status": "skipped", "reason": "No batches found..."}` (no-op, orchestrator ligne 66 ; vérifié en réel sur Booking le 2026-09-08) ; fichier déjà traité → batches skippés par le journal d'idempotence ; anomalie BLOCKING → halt sans rien poster ; après succès le fichier est archivé, donc le dossier redevient vide.
+
+**Contrepartie assumée** : plus de dry-run intermédiaire. Un fichier brouillon déposé par erreur sera traité s'il passe les gardes. Run manuel toujours possible : `POST /process {"ota":"airbnb|booking","date":"AUTO","dry_run":true}`, ou `gcloud scheduler jobs run <job>` pour un replay avec le body du job.
+
+## Cas spécial — import Airbnb inter-sociétés (2026-09-04)
+
+Fonds Airbnb de 5 apparts Archides (WAG20, FIN6, CLE7, TBG77, MAR359) versés par erreur sur le compte Airbnb de l'autre société de Mickaël (LMP MM), restitués de Sté à Sté (virement 30 716,92 € reçu le 02/09 sur Banque Populaire `5121003`, parqué en `4717003`). Philippe a déposé un export « 260903 Import Airbnb (spécial) » retraité à la main.
+
+- **Aucun changement de code** : le pipeline débite `51105000_AIRB` → `51104 AIR BNB` (compte de transit), que Philippe solde avec le virement de restitution. Le « 511005 » cité par Philippe n'existe pas au plan comptable — c'était `51104`.
+- Run `manual-airbnb-special-260903`, `date=2026-09-02` (date du virement) : 25 lots / 29 lignes / 79 écritures — 51104 30 716,92 · 604600 5 851,16 · 411AIRBNB 36 568,08 net. Au centime sur les chiffres Philippe.
+- **Pièges rencontrés sur un fichier retraité à la main** (à re-vérifier si ça se reproduit) :
+  1. **Dates jour/mois inversées** : export US `MM/DD/YYYY` ré-enregistré en locale FR → les cellules non ambiguës restent en texte (parsées OK par `_to_date`), les ambiguës (jour ≤ 12) deviennent des datetime avec jour et mois échangés. Détection : comparer `Date de début` à `fct_reservations.checkin_date`. Correction : swap day/month sur les cellules datetime.
+  2. **Formules dans `Versé`** (ex. `=M7`, `=M13+M14`) : un re-save openpyxl sans `data_only` perd la valeur cachée → `Versé=0` → faux `BALANCE_ERROR`. Toujours figer les formules en valeurs avant re-dépôt.
+  3. Libellés sans préfixe « Merveil - » → 29/29 `MAPPING_NOT_FOUND` en local, mais le **fallback Mews par code de confirmation** résout tout en prod (ne pas ajouter les libellés au mapping).
+- Le dossier « Compta - Sorties → Airbnb » où Philippe dépose n'est **pas** le dossier d'intake du pipeline (`DRIVE_FOLDER_AIRBNB`).
+- Déclenchement Airbnb et Booking : voir § Déclenchement Airbnb / Booking ci-dessous.
+- **Validé par Philippe le 2026-09-04** (« c'est parfait, je regarderai en compta »). Reste à sa main : affecter le virement du 02/09 (4717003) au 51104 — non vérifié côté DWH.
