@@ -561,6 +561,20 @@ réelle dans `gcloud run jobs executions list`.
 
 ## Changelog
 
+### 2026-09-16 — Les warnings sont enfin lisibles : détail loggé, pas seulement le compte
+
+**Problème** : l'alerte Monitoring matche `Done — N warnings` et sonnait tous les matins sur le run flux 2 de 7 h (11 le 16/09, 9 le 15, 10 le 14) sans qu'on puisse dire LESQUELLES — le détail ne partait que dans l'archive Drive, **absente en `bq_only`**, soit précisément le mode du flux 2. Une alerte intriable qu'on apprend à ignorer.
+
+**Correctif** : `orchestrator.py` logge une ligne de synthèse par type + une ligne par anomalie. ⚠ Placé d'abord juste avant le `Done` — donc **après** les `return` blocking et dry_run : le dry_run du 16/09 (11 warnings) n'a rien loggé. Le bloc tourne maintenant dès que la liste est construite, sur les trois chemins. Leçon : sur une fonction à sorties multiples, un log de fin ne couvre que le chemin nominal.
+
+**Ce que ça a montré le jour même** (run 16/09, 80 transactions) : `FX_VALUE_MISMATCH ×7` (paiements USD/GBP, Adyen encaisse 11 430,68 € pour un TTC Mews de 11 097,75 € → **+332,93 € de markup FX crédités sur le 411**, convention à figer avec Philippe) · `FEE_TRANSACTION ×1` (`Platform fee` −3 000 €) · `RESERVE_ADJUSTMENT ×1` (−2 878,80 €) · `CANAL_UNRESOLVED ×1` (190,55 €, compte Customer → 411WEBSITE) · `UNEXPECTED_CHANNEL ×1` (résa **Airbnb** réglée par carte, 381,10 € — seul des 11 à porter un risque de **double comptage** avec un payout Airbnb du flux 1).
+
+⚠ **Un compte stable n'est pas la preuve que rien ne bouge** : la fenêtre de fetch glisse sur J-7, donc les mêmes anomalies ressortent chaque matin sur des versements déjà postés (`skipped (journal)`). Comparer les **types**, pas le nombre.
+
+### 2026-09-14 — Alerte Cloud Monitoring dédiée + 6 alias Airbnb (préfixe « Merveil - » retiré)
+- **Alerte** `Pipeline Airbnb/Booking — run bloqué / libellé inconnu / warnings / scheduler KO` (mail Hatim, policy `alertPolicies/15724654362114914800`). Une seule condition log-match (contrainte GCP) : `blocking anomaly` · `Pipeline failed` · `absent du mapping` · `Done — … N warnings` (N ≥ 1) sur `booking-pipeline`, + `cloud_scheduler_job` en ERROR sur `airbnb-pipeline-daily` / `booking-pipeline-weekly`. Ferme le reste ouvert (b) du 2026-08-01 : le run `blocked` répond HTTP 200 et les logs Python sortent en severity DEFAULT → la policy générique « Cloud Run — Erreurs » ne le voyait pas. Source de vérité : `docs/` de la policy dans la console (procédure de reprise : corriger le mapping, redéployer, **redéposer le fichier** — un run bloqué archive le fichier).
+- **Airbnb retire le préfixe « Merveil - »** des annonces (et Wagram passe Family → Luxury) : 6 résolutions via Mews entre le 15/08 et le 14/09, toutes silencieuses (INFO). Alias ajoutés dans `AirbnbLogement_Compta.csv` : Clery, Turbigo I, Finlay, Viala I, Saint Martin IV (« Family Suite Marais - … », sans tiret), Wagram. Le fallback Mews absorbe, mais un libellé que Mews ne résout pas (collision, résa annulée) bloque tout le run → tenir le CSV à jour dès l'alerte.
+
 ### 2026-08-25 (soir) — Écart grand livre élucidé (orphelines) + purge auto + fix storage
 - `purge_stale_in_window` dans `ledger_full.py` + one-shot 12 040 orphelines → réco balance à 0,00 € sur 2024-2026. Cf. section dédiée + ADR.
 - `trial_balance.py` : périodes étendues à la fin de l'exercice ouvert (écritures futures ~372 k€).
@@ -586,7 +600,7 @@ réelle dans `gcloud run jobs executions list`.
 - **Impact 1** : 15 écritures Airbnb postées 28/04→28/07 avec libellé `KLE40-2D` (comptes et montants justes — le code comptable ne sert qu'au libellé, le 411 vient du canal). Correction côté Pennylane = décision Philippe, liste à fournir.
 - **Impact 2** : flux 2 bloqué 29-31/07 (`MAPPING_NOT_FOUND` BLOCKING sur 1 tx de 1 412,70 € → tout le run annulé), 4 versements/66,6 k€ non tracés, **sans alerte** (HTTP 200 sur `blocked` + trigger continuité au mauvais grain, cf. ADR 2026-08-01).
 - **Fix** : `2D`→`2F` dans les 3 CSV + ajout `BGO41-0F` à `Mapping_appart_code.csv` (2e appart actif absent, même bombe à retardement). Commit `8779167`, rev `00079-hqs`. Replay OK : 4 batches, 70 827,56 € équilibrés au centime, 0 bloquant. Couverture vérifiée : 124/124 apparts actifs 2026 mappés.
-- **Restes ouverts** : (a) dériver le code comptable au lieu de le recopier (backlog, cf. Known issues) ; (b) `server.py` renvoie HTTP 200 sur `status="blocked"` → invisible côté Cloud Monitoring ; (c) liste des 15 écritures pour Philippe.
+- **Restes ouverts** : (a) dériver le code comptable au lieu de le recopier (backlog, cf. Known issues) ; (b) ✅ 14/09 — alerte log-match dédiée (`server.py` renvoie toujours HTTP 200 sur `status="blocked"`, mais le log `blocking anomaly` est surveillé) ; (c) liste des 15 écritures pour Philippe.
 
 ### 2026-06-24 — Lot B Factures (customer + supplier invoices → BQ)
 - Module `pennylane/invoices_full.py` + job `invoices-full-pull` + scheduler `invoices-full-pull-daily` (6h15 Paris). Tables `pennylane.raw_customer_invoices` (2 383) + `raw_supplier_invoices` (15 650), 100% `ledger_entry_id`. Backfill 2024-07-01. Découverte : `sort` API limité à `id`/`date` → overlap 90j sur `date`. Section "Pipeline Factures" + ADR `decisions.md` 2026-06-24.
