@@ -133,6 +133,25 @@ def run_pipeline(
     blocking = [a for a in anomalies if a.severity == Severity.BLOCKING]
     warnings = [a for a in anomalies if a.severity == Severity.WARNING]
 
+    # ⚠ Jusqu'au 16/09, seul le COMPTE des warnings survivait au run : le détail
+    # partait dans l'archive Drive — absente en `bq_only`, qui est justement le
+    # mode du flux 2. L'alerte « Done — N warnings » sonnait donc tous les matins
+    # sans qu'on puisse jamais dire LESQUELLES (11 le 16/09, 9 la veille, 10
+    # l'avant-veille). Ces lignes sont la seule trace lisible depuis les logs.
+    # ⚠ La fenêtre de fetch est glissante (J-7) : les mêmes warnings reviennent
+    # chaque jour sur des versements déjà postés (`skipped (journal)`). Un compte
+    # stable n'est PAS la preuve que rien ne bouge — comparer les types.
+    if warnings:
+        par_type = Counter(a.type for a in warnings)
+        logger.warning(
+            "Anomalies WARNING (%d) — %s",
+            len(warnings),
+            ", ".join(f"{t}×{n}" for t, n in par_type.most_common()),
+        )
+        for a in warnings:
+            logger.warning("  [%s] %s", a.type, a.message)
+
+
     file_date = max(b.payout_date for b in src_result.batches).strftime("%Y-%m-%d")
 
     # ── Step 6: blocage si anomalie bloquante ──────────────────────────────
@@ -261,24 +280,6 @@ def run_pipeline(
 
         if not bq_only and i < total - 1:
             time.sleep(0.5)
-
-    # ⚠ Jusqu'au 16/09, seul le COMPTE des warnings survivait au run : le détail
-    # partait dans l'archive Drive — absente en `bq_only`, qui est justement le
-    # mode du flux 2. L'alerte « Done — N warnings » sonnait donc tous les matins
-    # sans qu'on puisse jamais dire LESQUELLES (11 le 16/09, 9 la veille, 10
-    # l'avant-veille). Ces lignes sont la seule trace lisible depuis les logs.
-    # ⚠ La fenêtre de fetch est glissante (J-7) : les mêmes warnings reviennent
-    # chaque jour sur des versements déjà postés (`skipped (journal)`). Un compte
-    # stable n'est PAS la preuve que rien ne bouge — comparer les types.
-    if warnings:
-        par_type = Counter(a.type for a in warnings)
-        logger.warning(
-            "Anomalies WARNING (%d) — %s",
-            len(warnings),
-            ", ".join(f"{t}×{n}" for t, n in par_type.most_common()),
-        )
-        for a in warnings:
-            logger.warning("  [%s] %s", a.type, a.message)
 
     logger.info(
         "Done — %d reservations, %d warnings, balance_ok=%s, %d batch(es) posted, %d skipped (journal)",
