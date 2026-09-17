@@ -561,6 +561,12 @@ réelle dans `gcloud run jobs executions list`.
 
 ## Changelog
 
+### 2026-09-17 — L'alerte « warnings » ne doit plus sonner pour le flux 2
+
+**Problème** : le mail « Pipeline Airbnb/Booking — … warnings » de 07:01 est déclenché par le run **mews-payments** de 07:00 (regex `Done — .* N warnings` sur tout le service), pas par un fichier Airbnb/Booking. Les runs Airbnb/Booking de 9h-13h qui ne trouvent rien se taisent (chemin nominal silencieux). Lu deux fois comme « un fichier a été déposé ? » alors que non.
+
+**Correctif** : `orchestrator.py` ajoute `source=<airbnb|booking|mews-payments>` **en fin** de ligne `Done — …` (le préfixe ne bouge pas → l'ancienne regex reste valide, pas de trou pendant la bascule). Policy `alertPolicies/15724654362114914800` à mettre à jour (console, condition unique) : remplacer `textPayload=~"Done — .* [1-9][0-9]* warnings"` par `textPayload=~"Done — .* [1-9][0-9]* warnings.*source=(airbnb|booking)"`. Les conditions `blocking anomaly` / `Pipeline failed` / `absent du mapping` restent globales : un flux 2 **bloqué** alerte toujours, seuls ses warnings (connus, en attente de Philippe) sortent du mail.
+
 ### 2026-09-16 — Les warnings sont enfin lisibles : détail loggé, pas seulement le compte
 
 **Problème** : l'alerte Monitoring matche `Done — N warnings` et sonnait tous les matins sur le run flux 2 de 7 h (11 le 16/09, 9 le 15, 10 le 14) sans qu'on puisse dire LESQUELLES — le détail ne partait que dans l'archive Drive, **absente en `bq_only`**, soit précisément le mode du flux 2. Une alerte intriable qu'on apprend à ignorer.

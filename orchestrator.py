@@ -281,9 +281,13 @@ def run_pipeline(
         if not bq_only and i < total - 1:
             time.sleep(0.5)
 
+    # ⚠ `source=` en fin de ligne : l'alerte Monitoring « warnings » doit ne
+    # matcher que airbnb/booking — le flux 2 (mews-payments) sonnait tous les
+    # matins pour des warnings connus (FX, réserve Adyen), cf. CLAUDE.md 17/09.
+    # Le préfixe « Done — » ne bouge pas : l'ancienne regex reste valide.
     logger.info(
-        "Done — %d reservations, %d warnings, balance_ok=%s, %d batch(es) posted, %d skipped (journal)",
-        len(all_processed), len(warnings), balance_ok, posted_count, skipped_count,
+        "Done — %d reservations, %d warnings, balance_ok=%s, %d batch(es) posted, %d skipped (journal) source=%s",
+        len(all_processed), len(warnings), balance_ok, posted_count, skipped_count, source.name,
     )
 
     # ── Step 11: archive Drive (seulement si Source basée Drive) ───────────
